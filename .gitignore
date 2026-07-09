@@ -216,3 +216,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Debug files
+page_debug.html
+
+# Raw data (PDFs too large for git)
+data/raw/
+
+# Diagnostic files
+*.json

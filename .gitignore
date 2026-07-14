@@ -226,3 +226,5 @@ data/raw/
 # Diagnostic files
 *.json
 .DS_Store
+database/dgcine.db
+database/dgcine.db

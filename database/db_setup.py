@@ -1,5 +1,6 @@
 import sqlite3
 import os
+import pandas as pd
 
 
 # ─────────────────────────────────────────
@@ -51,44 +52,33 @@ def get_table_info() -> None:
     conn.close()
 
 
-if __name__ == "__main__":
-    create_database()
-    get_table_info()
-
-
-import pandas as pd
-
-
 def load_productions(csv_path: str) -> None:
     """Load productions from 01_movies.csv into the database."""
     print(f"Loading productions from {csv_path}...")
 
     df = pd.read_csv(csv_path, sep=';', encoding='utf-8-sig')
 
-    # Map CSV columns to database columns
     df = df.rename(columns={
-        'movie_id':            'movie_id',
-        'title':               'title',
-        'production_year':     'production_year',
-        'release_year':        'release_year',
-        'genre':               'genre',
-        'duration_min':        'duration_min',
+        'movie_id':             'movie_id',
+        'title':                'title',
+        'production_year':      'production_year',
+        'release_year':         'release_year',
+        'genre':                'genre',
+        'duration_min':         'duration_min',
         'coproduction_country': 'coproduction_country',
-        'status':              'status',
-        'director':            'director',
-        'screenplay_author':   'screenplay_author',
-        'production_company':  'production_company',
-        'short_synopsis':      'short_synopsis',
-        'synopsis_source':     'synopsis_source',
-        'approx_budget':       'approx_budget',
-        'original_language':   'original_language',
+        'status':               'status',
+        'director':             'director',
+        'screenplay_author':    'screenplay_author',
+        'production_company':   'production_company',
+        'short_synopsis':       'short_synopsis',
+        'synopsis_source':      'synopsis_source',
+        'approx_budget':        'approx_budget',
+        'original_language':    'original_language',
     })
 
-    # Add missing columns with defaults
     df['production_type'] = 'dominican'
     df['incentive_type'] = 'unknown'
 
-    # Select only columns that exist in the database
     db_columns = [
         'movie_id', 'title', 'production_year', 'release_year',
         'genre', 'duration_min', 'coproduction_country', 'status',
@@ -105,6 +95,45 @@ def load_productions(csv_path: str) -> None:
     conn.close()
 
     print(f"Loaded {len(df)} productions into database.")
+
+
+def fix_tax_credit_pct(conn: sqlite3.Connection, results: list[dict]) -> None:
+    """
+    Fix tax_credit_pct based on incentive_article extracted from PDF text:
+    - Art. 34 (Dominican): 100% of investment is deductible
+    - Art. 39 (Foreign):   25% transferable tax credit on DR expenses
+    - Unknown:             NULL
+    """
+    cursor = conn.cursor()
+    updated_34 = 0
+    updated_39 = 0
+    unknown = 0
+
+    for r in results:
+        resolution = r.get('resolution_number')
+        incentive = r.get('incentive_article')
+
+        if incentive == 'art_34':
+            pct = 100.0
+            updated_34 += 1
+        elif incentive == 'art_39':
+            pct = 25.0
+            updated_39 += 1
+        else:
+            pct = None
+            unknown += 1
+
+        cursor.execute(
+            'UPDATE cipac_resolutions SET tax_credit_pct = ? WHERE resolution_number = ?',
+            (pct, resolution)
+        )
+
+    conn.commit()
+
+    print("\ntax_credit_pct updated:")
+    print(f"  Art. 34 (100%):  {updated_34} resolutions")
+    print(f"  Art. 39 (25%):   {updated_39} resolutions")
+    print(f"  Unknown (NULL):  {unknown} resolutions")
 
 
 if __name__ == "__main__":

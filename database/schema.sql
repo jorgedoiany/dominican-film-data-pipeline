@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS cipac_resolutions (
     resolution_date TEXT,
     validated_expenses_usd REAL,
     tax_credit_usd REAL,
-    tax_credit_pct REAL DEFAULT 25.0,
+    tax_credit_pct REAL,
     source_file TEXT
 );
 

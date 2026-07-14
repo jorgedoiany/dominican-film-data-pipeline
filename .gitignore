@@ -225,3 +225,4 @@ data/raw/
 
 # Diagnostic files
 *.json
+.DS_Store

@@ -268,14 +268,27 @@ def parse_pur_number(text: str) -> str | None:
 
 
 def parse_cpnd_number(text: str) -> str | None:
+    """Extract CPND number — searches by acronym or full phrase."""
+    # Try acronym first: CPND No. 534
     match = re.search(r'CPND\s*[Nn]o\.?\s*(\d+)', text)
     if match:
         return match.group(1).strip()
+
+    # Fallback: full phrase
+    match = re.search(
+        r'[Cc]ertificado\s+[Pp]rovisional\s+de\s+[Nn]acionalidad\s+[Dd]ominicana'
+        r'.{0,50}[Nn]o\.?\s*(\d+)',
+        text, re.DOTALL
+    )
+    if match:
+        return match.group(1).strip()
+
     return None
 
 
 def parse_request_date(text: str) -> str | None:
-    """Parse request date from 'Solicitud de fecha DD de MONTH del YYYY'."""
+    """Parse request date — handles Art. 34 and Art. 39 formats."""
+    # Art. 34: "Solicitud de fecha 26 de noviembre del 2025"
     match = re.search(
         r'[Ss]olicitud\s+de\s+fecha\s+(\d{1,2})\s+de\s+'
         r'(enero|febrero|marzo|abril|mayo|junio|julio|agosto|'
@@ -287,6 +300,20 @@ def parse_request_date(text: str) -> str | None:
         month = MONTHS.get(match.group(2).lower(), '00')
         year = match.group(3)
         return f"{year}-{month}-{day}"
+
+    # Art. 39: "Fecha de solicitud: 21 de mayo del 2026"
+    match = re.search(
+        r'[Ff]echa\s+de\s+solicitud\s*:\s*(\d{1,2})\s+de\s+'
+        r'(enero|febrero|marzo|abril|mayo|junio|julio|agosto|'
+        r'septiembre|octubre|noviembre|diciembre)\s+del?\s+(\d{4})',
+        text, re.IGNORECASE
+    )
+    if match:
+        day = match.group(1).zfill(2)
+        month = MONTHS.get(match.group(2).lower(), '00')
+        year = match.group(3)
+        return f"{year}-{month}-{day}"
+
     return None
 
 
@@ -342,10 +369,17 @@ def parse_resolution_date(text: str, debug: bool = False) -> str | None:
 
 def parse_amount_dop(text: str, keyword: str) -> float | None:
     """Parse DOP amount — handles OCR variants RD$, RDS$, RDS."""
-    pattern = rf'{re.escape(keyword)}.{{0,300}}RD[S$]?\$?\s*([\d,\.]+)'
+    pattern = rf'{re.escape(keyword)}.{{0,400}}RD[S$]?\$?\s*([\d,\.]+)'
     match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
     if match:
-        return parse_amount_value(match.group(1))
+        raw = match.group(1).replace(',', '')
+        try:
+            val = float(raw)
+            if val > 500_000_000:
+                val = val / 100
+            return val
+        except ValueError:
+            return None
     return None
 
 
@@ -357,6 +391,9 @@ def parse_total_budget_approved(text: str, debug: bool = False) -> float | None:
         r'aprob[óo0].{0,120}?presupuesto.{0,260}?RD[S$]?\$?\s*([\d,\.]+)',
         r'aprob[óo0].{0,100}?presu\w*.{0,260}?RD[S$]?\$?\s*([\d,\.]+)',
         r'presupuesto\s+total.{0,220}?RD[S$]?\$?\s*([\d,\.]+)',
+        r'aprob[óo0].{0,100}?pre.{0,30}?total.{0,200}?RD[S$]?\$?\s*([\d,\.]+)',
+        # Art. 39 pattern
+        r'presupuesto\s+aprobado\s+ascendente.{0,100}?RD[S$]?\$?\s*([\d,\.]+)',
     ]
 
     for idx, pattern in enumerate(patterns, start=1):
@@ -386,6 +423,7 @@ def parse_total_budget_executed(text: str, debug: bool = False) -> float | None:
         r'ejecuci[oó]n\s+total\s+del\s+presupuesto.{0,260}?RD[S$]?\$?\s*([\d,\.]+)',
         r'asciende\s+a\s+la\s+suma\s+de\s+RD[S$]?\$?\s*([\d,\.]+)',
         r'inversi[oó]n\s+realizada.{0,260}?RD[S$]?\$?\s*([\d,\.]+)',
+        r'gastos\s+ejecutados.{0,200}?RD[S$]?\$?\s*([\d,\.]+)',
     ]
 
     for idx, pattern in enumerate(patterns, start=1):
@@ -446,53 +484,43 @@ def build_extraction_quality(
 def extract_cipac_fields(text: str, source_file: str) -> dict:
     """Extract all structured fields from CIPAC resolution text."""
     text_norm = normalize(text)
-    debug = EXTRACTION_DEBUG
-
-    if debug:
-        debug_log(f"\n[DEBUG] Extracting fields for file: {os.path.basename(source_file)}")
 
     resolution_number = parse_resolution_number(text_norm)
     year = resolution_number.split('-')[1] if resolution_number else None
+    incentive_article = parse_incentive_article(text_norm)
 
-    resolution_date = parse_resolution_date(text_norm, debug=debug)
-    total_budget_approved = parse_total_budget_approved(text_norm, debug=debug)
-    total_budget_executed = parse_total_budget_executed(text_norm, debug=debug)
-    extraction_confidence, needs_review, review_reasons = build_extraction_quality(
-        resolution_date,
-        total_budget_approved,
-        total_budget_executed,
-    )
+    investor = parse_investor_name(text_norm)
+    production_company = parse_production_company(text_norm)
+    producer_rnc = parse_rnc(text_norm, 'R.N.C. Productor')
 
-    if debug:
-        debug_log('[DEBUG] Field summary (critical fields):')
-        debug_log(f"[DEBUG] resolution_date={resolution_date}")
-        debug_log(f"[DEBUG] total_budget_approved={total_budget_approved}")
-        debug_log(f"[DEBUG] total_budget_executed={total_budget_executed}")
-        debug_log(f"[DEBUG] extraction_confidence={extraction_confidence}")
-        debug_log(f"[DEBUG] needs_review={needs_review}")
-        if review_reasons:
-            debug_log(f"[DEBUG] review_reasons={','.join(review_reasons)}")
+    if incentive_article == 'art_39':
+        # For Art. 39 the solicitante IS the production company
+        # The foreign investor does not appear in the resolution
+        if not production_company:
+            production_company = investor
+            producer_rnc = parse_rnc(text_norm, 'R.N.C')
+        investor = None
+        investor_rnc = None
+    else:
+        investor_rnc = parse_rnc(text_norm, 'R.N.C')
 
     return {
         'resolution_number':      resolution_number,
         'year':                   year,
-        'incentive_article':      parse_incentive_article(text_norm),
-        'investor_name':          parse_investor_name(text_norm),
-        'investor_rnc':           parse_rnc(text_norm, 'R.N.C'),
+        'incentive_article':      incentive_article,
+        'investor_name':          investor,
+        'investor_rnc':           investor_rnc,
         'film_title':             parse_film_title(text_norm),
-        'production_company':     parse_production_company(text_norm),
-        'producer_rnc':           parse_rnc(text_norm, 'R.N.C. Productor'),
+        'production_company':     production_company,
+        'producer_rnc':           producer_rnc,
         'pur_number':             parse_pur_number(text_norm),
         'cpnd_number':            parse_cpnd_number(text_norm),
-        'resolution_date':        resolution_date,
+        'resolution_date':        parse_resolution_date(text_norm),
         'request_date':           parse_request_date(text_norm),
         'validated_amount_dop':   parse_amount_dop(text_norm, 'PRIMERO: VALIDAR'),
         'tax_credit_dop':         parse_amount_dop(text_norm, 'SEGUNDO: AUTORIZAR'),
-        'total_budget_approved':  total_budget_approved,
-        'total_budget_executed':  total_budget_executed,
-        'extraction_confidence':  extraction_confidence,
-        'needs_review':           needs_review,
-        'review_reasons':         ';'.join(review_reasons),
+        'total_budget_approved':  parse_total_budget_approved(text_norm),
+        'total_budget_executed':  parse_total_budget_executed(text_norm),
         'source_file':            os.path.basename(source_file),
     }
 

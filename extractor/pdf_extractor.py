@@ -213,20 +213,28 @@ def parse_incentive_article(text: str) -> str | None:
 
 
 def parse_investor_name(text: str) -> str | None:
-    """Extract investor name — stops before R.N.C."""
+    """Extract investor name — stops before R.N.C. or OCR variants."""
     match = re.search(r'[Ss]olicitante\s*[:\-]?\s*([^\n]+)', text)
     if match:
         name = match.group(1).strip()
-        name = re.split(r'\s+R\.N\.C', name)[0].strip()
+        name = re.split(r'\s+R[\.\s]?N[\.\s:]+', name)[0].strip()
         return name
     return None
 
 
 def parse_rnc(text: str, label: str = 'R.N.C') -> str | None:
-    pattern = rf'{re.escape(label)}\.?\s*[:\-]?\s*([\d\-]+)'
+    """Extract RNC — tolerant of OCR variants like RN:ES, R.N.C:, R.N.C::, RNC."""
+    pattern = rf'{re.escape(label)}\.?\s*[:\-]{{1,2}}\s*([\d\-]+)'
     match = re.search(pattern, text, re.IGNORECASE)
     if match:
         return match.group(1).strip()
+
+    # For base R.N.C label only — try OCR variants
+    if label == 'R.N.C':
+        match = re.search(r'R[\.\s]?N[\.\s:]+[A-Z]{0,2}\s*([\d\-]+)', text)
+        if match:
+            return match.group(1).strip()
+
     return None
 
 
@@ -368,32 +376,25 @@ def parse_resolution_date(text: str, debug: bool = False) -> str | None:
 
 
 def parse_amount_dop(text: str, keyword: str) -> float | None:
-    """Parse DOP amount — handles OCR variants RD$, RDS$, RDS."""
-    pattern = rf'{re.escape(keyword)}.{{0,400}}RD[S$]?\$?\s*([\d,\.]+)'
+    """Parse DOP amount — handles OCR variants RD$, RDS$, RDS, RD$S."""
+    pattern = rf'{re.escape(keyword)}.{{0,400}}R\s*D\s*[S$\.]{{0,2}}\s*([\d,\.]+)'
     match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
     if match:
-        raw = match.group(1).replace(',', '')
-        try:
-            val = float(raw)
-            if val > 500_000_000:
-                val = val / 100
-            return val
-        except ValueError:
-            return None
+        val = parse_amount_value(match.group(1))
+        return val
     return None
 
 
 def parse_total_budget_approved(text: str, debug: bool = False) -> float | None:
     """Parse approved budget from CPND approval paragraph."""
     patterns = [
-        r'aprob[óo0]\s+un\s+presupuesto\s+total.{0,220}?RD[S$]?\$?\s*([\d,\.]+)',
-        r'presupuesto\s+a\s+aplicar\s+al\s+incentivo.{0,260}?RD[S$]?\$?\s*([\d,\.]+)',
-        r'aprob[óo0].{0,120}?presupuesto.{0,260}?RD[S$]?\$?\s*([\d,\.]+)',
-        r'aprob[óo0].{0,100}?presu\w*.{0,260}?RD[S$]?\$?\s*([\d,\.]+)',
-        r'presupuesto\s+total.{0,220}?RD[S$]?\$?\s*([\d,\.]+)',
-        r'aprob[óo0].{0,100}?pre.{0,30}?total.{0,200}?RD[S$]?\$?\s*([\d,\.]+)',
-        # Art. 39 pattern
-        r'presupuesto\s+aprobado\s+ascendente.{0,100}?RD[S$]?\$?\s*([\d,\.]+)',
+        r'aprob[óo0]\s+un\s+presupuesto\s+total.{0,220}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
+        r'presupuesto\s+a\s+aplicar\s+al\s+incentivo.{0,260}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
+        r'aprob[óo0].{0,120}?presupuesto.{0,260}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
+        r'aprob[óo0].{0,100}?presu\w*.{0,260}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
+        r'presupuesto\s+total.{0,220}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
+        r'aprob[óo0].{0,100}?pre.{0,30}?total.{0,200}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
+        r'presupuesto\s+aprobado\s+ascendente.{0,100}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
     ]
 
     for idx, pattern in enumerate(patterns, start=1):
@@ -420,10 +421,10 @@ def parse_total_budget_approved(text: str, debug: bool = False) -> float | None:
 def parse_total_budget_executed(text: str, debug: bool = False) -> float | None:
     """Parse total executed budget."""
     patterns = [
-        r'ejecuci[oó]n\s+total\s+del\s+presupuesto.{0,260}?RD[S$]?\$?\s*([\d,\.]+)',
-        r'asciende\s+a\s+la\s+suma\s+de\s+RD[S$]?\$?\s*([\d,\.]+)',
-        r'inversi[oó]n\s+realizada.{0,260}?RD[S$]?\$?\s*([\d,\.]+)',
-        r'gastos\s+ejecutados.{0,200}?RD[S$]?\$?\s*([\d,\.]+)',
+        r'ejecuci[oó]n\s+total\s+del\s+presupuesto.{0,260}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
+        r'asciende\s+a\s+la\s+suma\s+de\s+R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
+        r'inversi[oó]n\s+realizada.{0,260}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
+        r'gastos\s+ejecutados.{0,200}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
     ]
 
     for idx, pattern in enumerate(patterns, start=1):
@@ -494,8 +495,6 @@ def extract_cipac_fields(text: str, source_file: str) -> dict:
     producer_rnc = parse_rnc(text_norm, 'R.N.C. Productor')
 
     if incentive_article == 'art_39':
-        # For Art. 39 the solicitante IS the production company
-        # The foreign investor does not appear in the resolution
         if not production_company:
             production_company = investor
             producer_rnc = parse_rnc(text_norm, 'R.N.C')
@@ -503,6 +502,16 @@ def extract_cipac_fields(text: str, source_file: str) -> dict:
         investor_rnc = None
     else:
         investor_rnc = parse_rnc(text_norm, 'R.N.C')
+
+    resolution_date = parse_resolution_date(text_norm)
+    total_budget_approved = parse_total_budget_approved(text_norm)
+    total_budget_executed = parse_total_budget_executed(text_norm)
+
+    confidence, needs_review, review_reasons = build_extraction_quality(
+        resolution_date=resolution_date,
+        total_budget_approved=total_budget_approved,
+        total_budget_executed=total_budget_executed,
+    )
 
     return {
         'resolution_number':      resolution_number,
@@ -515,12 +524,15 @@ def extract_cipac_fields(text: str, source_file: str) -> dict:
         'producer_rnc':           producer_rnc,
         'pur_number':             parse_pur_number(text_norm),
         'cpnd_number':            parse_cpnd_number(text_norm),
-        'resolution_date':        parse_resolution_date(text_norm),
+        'resolution_date':        resolution_date,
         'request_date':           parse_request_date(text_norm),
         'validated_amount_dop':   parse_amount_dop(text_norm, 'PRIMERO: VALIDAR'),
         'tax_credit_dop':         parse_amount_dop(text_norm, 'SEGUNDO: AUTORIZAR'),
-        'total_budget_approved':  parse_total_budget_approved(text_norm),
-        'total_budget_executed':  parse_total_budget_executed(text_norm),
+        'total_budget_approved':  total_budget_approved,
+        'total_budget_executed':  total_budget_executed,
+        'extraction_confidence':  confidence,
+        'needs_review':           needs_review,
+        'review_reasons':         ';'.join(review_reasons) if review_reasons else None,
         'source_file':            os.path.basename(source_file),
     }
 

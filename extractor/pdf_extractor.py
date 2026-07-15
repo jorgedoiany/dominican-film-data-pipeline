@@ -291,54 +291,53 @@ def parse_request_date(text: str) -> str | None:
 
 
 def parse_resolution_date(text: str, debug: bool = False) -> str | None:
-    """Parse resolution date from 'Dada en... a los DD dias del mes de MONTH ... (YYYY)'."""
-    match = re.search(
-        r'[Dd]ad[ao]\s+en.{0,260}?'
-        r'a\s*los?\s+([a-záéíóúñ]+(?:\s+y\s+[a-záéíóúñ]+)?|\d{1,2})\s*(?:\((\d{1,2})\))?\s+d[íi]as?\s+del\s+mes\s+de\s+'
-        r'(enero|febrero|marzo|abril|mayo|junio|julio|agosto|'
-        r'septiembre|octubre|noviembre|diciembre)'
-        r'.{0,100}?\((\d{4})\)',
-        text, re.IGNORECASE | re.DOTALL
-    )
-    if match:
-        day = parse_day_token(match.group(1), match.group(2))
-        month = MONTHS.get(match.group(3).lower(), '00')
-        year = match.group(4)
-        if not day:
-            if debug:
-                debug_log('[DEBUG][resolution_date] Match found but day token could not be parsed.')
-                debug_log(f"[DEBUG][resolution_date] day_token='{match.group(1)}', day_paren='{match.group(2)}'")
-                debug_log(f"[DEBUG][resolution_date] snippet='{build_match_snippet(text, match)}'")
-            return None
-        if debug:
-            debug_log('[DEBUG][resolution_date] Pattern matched successfully.')
-            debug_log(f"[DEBUG][resolution_date] parsed='{year}-{month}-{day}'")
-            debug_log(f"[DEBUG][resolution_date] snippet='{build_match_snippet(text, match)}'")
-        return f"{year}-{month}-{day}"
+    """Parse resolution date — searches opening paragraph first."""
+    MONTHS = {
+        'enero': '01', 'febrero': '02', 'marzo': '03',
+        'abril': '04', 'mayo': '05', 'junio': '06',
+        'julio': '07', 'agosto': '08', 'septiembre': '09',
+        'octubre': '10', 'noviembre': '11', 'diciembre': '12'
+    }
 
-    # Fallback for OCR-degraded variants where "a los" is partially lost.
-    fallback_match = re.search(
-        r'[Dd]ad[ao]\s+en.{0,320}?'
-        r'(\d{1,2})\s*\)?\s*d[íi]as?\s+del\s+mes\s+de\s+'
-        r'(enero|febrero|marzo|abril|mayo|junio|julio|agosto|'
-        r'septiembre|octubre|noviembre|diciembre)'
-        r'.{0,120}?\((\d{4})\)',
-        text, re.IGNORECASE | re.DOTALL
-    )
-    if fallback_match:
-        day = fallback_match.group(1).zfill(2)
-        month = MONTHS.get(fallback_match.group(2).lower(), '00')
-        year = fallback_match.group(3)
-        if debug:
-            debug_log('[DEBUG][resolution_date] Fallback pattern matched successfully.')
-            debug_log(f"[DEBUG][resolution_date] parsed='{year}-{month}-{day}'")
-            debug_log(f"[DEBUG][resolution_date] snippet='{build_match_snippet(text, fallback_match)}'")
-        return f"{year}-{month}-{day}"
+    def extract_date(text_chunk: str) -> str | None:
+        # Handles: "el/a los quince (15) día/días del mes de enero ... (2026)"
+        # Handles: "a los 15 (quince) días del mes de enero ... (2026)"
+        match = re.search(
+            r'(?:el|a\s+los?)\s+(\w+)\s*\((\d{1,2})\)\s+d[íi]as?\s+del\s+m\w{1,3}\s+de\s+'
+            r'(enero|febrero|marzo|abril|mayo|junio|julio|agosto|'
+            r'septiembre|octubre|noviembre|diciembre)'
+            r'.{0,80}\((\d{4})\)',
+            text_chunk, re.IGNORECASE | re.DOTALL
+        )
+        if match:
+            day = match.group(2).zfill(2)
+            month = MONTHS.get(match.group(3).lower(), '00')
+            year = match.group(4)
+            return f"{year}-{month}-{day}"
 
-    if debug:
-        debug_log('[DEBUG][resolution_date] No regex match found.')
+        # Handles: "a los 15 (quince) días"
+        match = re.search(
+            r'(?:el|a\s+los?)\s+(\d{1,2})\s*\(\w+\)\s+d[íi]as?\s+del\s+m\w{1,3}\s+de\s+'
+            r'(enero|febrero|marzo|abril|mayo|junio|julio|agosto|'
+            r'septiembre|octubre|noviembre|diciembre)'
+            r'.{0,80}\((\d{4})\)',
+            text_chunk, re.IGNORECASE | re.DOTALL
+        )
+        if match:
+            day = match.group(1).zfill(2)
+            month = MONTHS.get(match.group(2).lower(), '00')
+            year = match.group(3)
+            return f"{year}-{month}-{day}"
 
-    return None
+        return None
+
+    # Primary — opening paragraph (first 1000 chars)
+    result = extract_date(text[:1000])
+    if result:
+        return result
+
+    # Fallback — full document
+    return extract_date(text)
 
 
 def parse_amount_dop(text: str, keyword: str) -> float | None:

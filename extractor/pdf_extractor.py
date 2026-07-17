@@ -213,8 +213,15 @@ def parse_incentive_article(text: str) -> str | None:
 
 
 def parse_investor_name(text: str) -> str | None:
-    """Extract investor name — stops before R.N.C. or OCR variants."""
-    match = re.search(r'[Ss]olicitante\s*[:\-]?\s*([^\n]+)', text)
+    """Extract investor name using OCR-safe stop markers."""
+    match = re.search(
+        r'[Ss]olicitante\s*[:\-]?\s*(.+?)'
+        r'(?=\s+R[\.\s]?N[\.\s:]|\s+[Pp]roductor\s+[Cc]inematogr[áa]fico|'
+        r'\s+[Oo]bra\s+cinematogr[áa]fica|\s+[Pp]ermiso\s+[ÚUu]nico|'
+        r'\s+[Cc]ertificado\s+[Pp]rovisional|\s+PRIMERO:|\s+SEGUNDO:|$)',
+        text,
+        re.IGNORECASE,
+    )
     if match:
         name = match.group(1).strip()
         name = re.split(r'\s+R[\.\s]?N[\.\s:]+', name)[0].strip()
@@ -253,10 +260,14 @@ def parse_film_title(text: str) -> str | None:
 
 
 def parse_production_company(text: str) -> str | None:
-    """Extract production company — stops at newline."""
+    """Extract production company using OCR-safe stop markers."""
     match = re.search(
-        r'[Pp]roductor\s+[Cc]inematogr[áa]fico\s*[:\-]?\s*([^\n]+)',
-        text
+        r'[Pp]roductor\s+[Cc]inematogr[áa]fico\s*[:\-]?\s*(.+?)'
+        r'(?=\s+R[\.\s]?N[\.\s:]|\s+[Pp]ermiso\s+[ÚUu]nico|'
+        r'\s+[Cc]ertificado\s+[Pp]rovisional|\s+[Oo]bra\s+cinematogr[áa]fica|'
+        r'\s+[Ss]olicitante\s*[:\-]?|\s+PRIMERO:|\s+SEGUNDO:|$)',
+        text,
+        re.IGNORECASE,
     )
     if match:
         company = match.group(1).strip()
@@ -267,7 +278,7 @@ def parse_production_company(text: str) -> str | None:
 
 def parse_pur_number(text: str) -> str | None:
     match = re.search(
-        r'[Pp]ermiso\s+[ÚUu]nico\s+de\s+[Rr]odaje\s*[:\-]?\s*(\d+)',
+        r'[Pp]ermiso\s+[ÚUuÜü]{1,2}[Nn]ico\s+de\s+[Rr]odaje\s*[:\-]?\s*(\d+)',
         text
     )
     if match:
@@ -327,13 +338,6 @@ def parse_request_date(text: str) -> str | None:
 
 def parse_resolution_date(text: str, debug: bool = False) -> str | None:
     """Parse resolution date — searches opening paragraph first."""
-    MONTHS = {
-        'enero': '01', 'febrero': '02', 'marzo': '03',
-        'abril': '04', 'mayo': '05', 'junio': '06',
-        'julio': '07', 'agosto': '08', 'septiembre': '09',
-        'octubre': '10', 'noviembre': '11', 'diciembre': '12'
-    }
-
     def extract_date(text_chunk: str) -> str | None:
         # Handles: "el/a los quince (15) día/días del mes de enero ... (2026)"
         # Handles: "a los 15 (quince) días del mes de enero ... (2026)"
@@ -348,6 +352,10 @@ def parse_resolution_date(text: str, debug: bool = False) -> str | None:
             day = match.group(2).zfill(2)
             month = MONTHS.get(match.group(3).lower(), '00')
             year = match.group(4)
+            if debug:
+                debug_log("[DEBUG][resolution_date] Pattern 1 matched successfully.")
+                debug_log(f"[DEBUG][resolution_date] parsed='{year}-{month}-{day}'")
+                debug_log(f"[DEBUG][resolution_date] snippet='{build_match_snippet(text_chunk, match)}'")
             return f"{year}-{month}-{day}"
 
         # Handles: "a los 15 (quince) días"
@@ -362,6 +370,10 @@ def parse_resolution_date(text: str, debug: bool = False) -> str | None:
             day = match.group(1).zfill(2)
             month = MONTHS.get(match.group(2).lower(), '00')
             year = match.group(3)
+            if debug:
+                debug_log("[DEBUG][resolution_date] Pattern 2 matched successfully.")
+                debug_log(f"[DEBUG][resolution_date] parsed='{year}-{month}-{day}'")
+                debug_log(f"[DEBUG][resolution_date] snippet='{build_match_snippet(text_chunk, match)}'")
             return f"{year}-{month}-{day}"
 
         return None
@@ -372,7 +384,10 @@ def parse_resolution_date(text: str, debug: bool = False) -> str | None:
         return result
 
     # Fallback — full document
-    return extract_date(text)
+    result = extract_date(text)
+    if debug and not result:
+        debug_log('[DEBUG][resolution_date] No regex match found.')
+    return result
 
 
 def parse_amount_dop(text: str, keyword: str) -> float | None:
@@ -449,30 +464,85 @@ def parse_total_budget_executed(text: str, debug: bool = False) -> float | None:
 
 
 def build_extraction_quality(
+    resolution_number: str | None,
+    year: str | None,
+    incentive_article: str | None,
+    investor_name: str | None,
+    investor_rnc: str | None,
     resolution_date: str | None,
+    request_date: str | None,
+    film_title: str | None,
+    production_company: str | None,
+    producer_rnc: str | None,
+    pur_number: str | None,
+    cpnd_number: str | None,
+    validated_amount_dop: float | None,
+    tax_credit_dop: float | None,
     total_budget_approved: float | None,
-    total_budget_executed: float | None,
 ) -> tuple[float, bool, list[str]]:
     """Compute a lightweight confidence score and review reasons."""
     score = 1.0
     reasons: list[str] = []
 
+    if not resolution_number:
+        score -= 0.10
+        reasons.append('missing_resolution_number')
+
+    if not year:
+        score -= 0.05
+        reasons.append('missing_year')
+
+    if not incentive_article:
+        score -= 0.10
+        reasons.append('missing_incentive_article')
+
     if not resolution_date:
-        score -= 0.35
+        score -= 0.10
         reasons.append('missing_resolution_date')
 
+    if not request_date:
+        score -= 0.10
+        reasons.append('missing_request_date')
+
+    if not film_title:
+        score -= 0.10
+        reasons.append('missing_film_title')
+
+    if not production_company:
+        score -= 0.10
+        reasons.append('missing_production_company')
+
+    if not producer_rnc:
+        score -= 0.10
+        reasons.append('missing_producer_rnc')
+
+    if not pur_number:
+        score -= 0.10
+        reasons.append('missing_pur_number')
+
+    if incentive_article == 'art_34' and not cpnd_number:
+        score -= 0.10
+        reasons.append('missing_cpnd_number')
+
+    if incentive_article == 'art_34' and not investor_name:
+        score -= 0.10
+        reasons.append('missing_investor_name')
+
+    if incentive_article == 'art_34' and not investor_rnc:
+        score -= 0.10
+        reasons.append('missing_investor_rnc')
+
+    if validated_amount_dop is None:
+        score -= 0.10
+        reasons.append('missing_validated_amount_dop')
+
+    if tax_credit_dop is None:
+        score -= 0.10
+        reasons.append('missing_tax_credit_dop')
+
     if total_budget_approved is None:
-        score -= 0.25
+        score -= 0.10
         reasons.append('missing_total_budget_approved')
-
-    if total_budget_executed is None:
-        score -= 0.25
-        reasons.append('missing_total_budget_executed')
-
-    if total_budget_approved is not None and total_budget_executed is not None:
-        if total_budget_executed > total_budget_approved:
-            score -= 0.10
-            reasons.append('executed_budget_gt_approved_budget')
 
     score = max(0.0, round(score, 2))
     needs_review = len(reasons) > 0
@@ -489,6 +559,10 @@ def extract_cipac_fields(text: str, source_file: str) -> dict:
     resolution_number = parse_resolution_number(text_norm)
     year = resolution_number.split('-')[1] if resolution_number else None
     incentive_article = parse_incentive_article(text_norm)
+    film_title = parse_film_title(text_norm)
+    pur_number = parse_pur_number(text_norm)
+    cpnd_number = parse_cpnd_number(text_norm)
+    request_date = parse_request_date(text_norm)
 
     investor = parse_investor_name(text_norm)
     production_company = parse_production_company(text_norm)
@@ -507,10 +581,29 @@ def extract_cipac_fields(text: str, source_file: str) -> dict:
     total_budget_approved = parse_total_budget_approved(text_norm)
     total_budget_executed = parse_total_budget_executed(text_norm)
 
+    validated_amount_dop = parse_amount_dop(text_norm, 'PRIMERO: VALIDAR')
+    tax_credit_dop = parse_amount_dop(text_norm, 'SEGUNDO: AUTORIZAR')
+
+    # Art. 34 fallback: tax_credit = validated_amount (they are always equal)
+    if tax_credit_dop is None and incentive_article == 'art_34' and validated_amount_dop:
+        tax_credit_dop = validated_amount_dop
+
     confidence, needs_review, review_reasons = build_extraction_quality(
+        resolution_number=resolution_number,
+        year=year,
+        incentive_article=incentive_article,
+        investor_name=investor,
+        investor_rnc=investor_rnc,
         resolution_date=resolution_date,
+        request_date=request_date,
+        film_title=film_title,
+        production_company=production_company,
+        producer_rnc=producer_rnc,
+        pur_number=pur_number,
+        cpnd_number=cpnd_number,
+        validated_amount_dop=validated_amount_dop,
+        tax_credit_dop=tax_credit_dop,
         total_budget_approved=total_budget_approved,
-        total_budget_executed=total_budget_executed,
     )
 
     return {
@@ -519,20 +612,22 @@ def extract_cipac_fields(text: str, source_file: str) -> dict:
         'incentive_article':      incentive_article,
         'investor_name':          investor,
         'investor_rnc':           investor_rnc,
-        'film_title':             parse_film_title(text_norm),
+        'film_title':             film_title,
         'production_company':     production_company,
         'producer_rnc':           producer_rnc,
-        'pur_number':             parse_pur_number(text_norm),
-        'cpnd_number':            parse_cpnd_number(text_norm),
+        'pur_number':             pur_number,
+        'cpnd_number':            cpnd_number,
         'resolution_date':        resolution_date,
-        'request_date':           parse_request_date(text_norm),
-        'validated_amount_dop':   parse_amount_dop(text_norm, 'PRIMERO: VALIDAR'),
-        'tax_credit_dop':         parse_amount_dop(text_norm, 'SEGUNDO: AUTORIZAR'),
+        'request_date':           request_date,
+        'validated_amount_dop':   validated_amount_dop,
+        'tax_credit_dop':         tax_credit_dop,
         'total_budget_approved':  total_budget_approved,
         'total_budget_executed':  total_budget_executed,
         'extraction_confidence':  confidence,
         'needs_review':           needs_review,
         'review_reasons':         ';'.join(review_reasons) if review_reasons else None,
+        'manually_reviewed':      False,
+        'manual_note':            None,
         'source_file':            os.path.basename(source_file),
     }
 

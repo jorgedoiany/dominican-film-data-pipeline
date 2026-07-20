@@ -205,10 +205,19 @@ def parse_resolution_number(text: str) -> str | None:
 
 
 def parse_incentive_article(text: str) -> str | None:
-    """Extract incentive article from Referente field."""
+    """Extract incentive article from Referente field or resolution title."""
+    # Primary: explicit article mention
     match = re.search(r'[Aa]rt[íi]culo\s*(34|39)', text)
     if match:
         return f"art_{match.group(1)}"
+
+    # Fallback: resolution title indicates type
+    if re.search(r'VALIDACI[ÓO]N\s+DE\s+GASTOS', text, re.IGNORECASE):
+        return 'art_39'
+
+    if re.search(r'VALIDACI[ÓO]N\s+DE\s+INVERSI[ÓO]N', text, re.IGNORECASE):
+        return 'art_34'
+
     return None
 
 

@@ -141,7 +141,7 @@ def parse_amount_value(raw_amount: str) -> float | None:
         return None
 
     cleaned = raw_amount.strip().replace(' ', '')
-    # Remove trailing punctuation often added by OCR, e.g. "65,614,583.00." or "79,738,187.."
+    # Remove trailing punctuation often added by OCR
     cleaned = re.sub(r'[^\d]+$', '', cleaned)
 
     if not re.search(r'\d', cleaned):
@@ -154,13 +154,26 @@ def parse_amount_value(raw_amount: str) -> float | None:
             cleaned = cleaned.replace('.', '').replace(',', '.')
         else:
             # Example: 79,738,189.20 -> 79738189.20
-            cleaned = cleaned.replace(',', '')
+            # Also handles OCR dots as thousand separators: 2,000.000.00
+            dot_count = cleaned.count('.')
+            if dot_count > 1:
+                # Multiple dots = thousand separators: 2,000.000.00 -> 2000000.00
+                parts = cleaned.rsplit('.', 1)
+                cleaned = parts[0].replace(',', '').replace('.', '') + '.' + parts[1]
+            else:
+                cleaned = cleaned.replace(',', '')
     elif ',' in cleaned:
-        # If comma behaves as decimal separator (1-2 digits on the right), convert it.
         if re.match(r'^\d+,\d{1,2}$', cleaned):
             cleaned = cleaned.replace(',', '.')
         else:
             cleaned = cleaned.replace(',', '')
+    elif '.' in cleaned:
+        # Only dots: could be thousand separators
+        # Example: 500.000.00 -> 500000.00
+        dot_count = cleaned.count('.')
+        if dot_count > 1:
+            parts = cleaned.rsplit('.', 1)
+            cleaned = parts[0].replace('.', '') + '.' + parts[1]
 
     try:
         value = float(cleaned)
@@ -251,6 +264,16 @@ def parse_rnc(text: str, label: str = 'R.N.C') -> str | None:
         if match:
             return match.group(1).strip()
 
+    # For R.N.C. Productor — fallback to second RNC occurrence in document
+    # Producer RNC appears exactly twice: once in header (OCR noise) and once
+    # in Considerando paragraph (clean text)
+    if label == 'R.N.C. Productor':
+        matches = re.findall(r'\b(\d{1}-\d{2}-\d{5}-\d{1})\b', text)
+        if len(matches) >= 2:
+            return matches[1]
+        elif matches:
+            return matches[0]
+
     return None
 
 
@@ -296,9 +319,19 @@ def parse_pur_number(text: str) -> str | None:
 
 
 def parse_cpnd_number(text: str) -> str | None:
-    """Extract CPND number — searches by acronym or full phrase."""
-    # Try acronym first: CPND No. 534
+    """Extract CPND number — handles multiple formats."""
+    # Format: CPND No. 534 or No. CPND 522
     match = re.search(r'CPND\s*[Nn]o\.?\s*(\d+)', text)
+    if match:
+        return match.group(1).strip()
+
+    # Format: CPND 522 or CPND-522
+    match = re.search(r'CPND[\s\-]+(\d+)', text)
+    if match:
+        return match.group(1).strip()
+
+    # Format: No. CPND 522
+    match = re.search(r'[Nn]o\.?\s+CPND\s+(\d+)', text)
     if match:
         return match.group(1).strip()
 
@@ -315,7 +348,7 @@ def parse_cpnd_number(text: str) -> str | None:
 
 
 def parse_request_date(text: str) -> str | None:
-    """Parse request date — handles Art. 34 and Art. 39 formats."""
+    """Parse request date — handles Art. 34, Art. 39 and Considerando formats."""
     # Art. 34: "Solicitud de fecha 26 de noviembre del 2025"
     match = re.search(
         r'[Ss]olicitud\s+de\s+fecha\s+(\d{1,2})\s+de\s+'
@@ -340,6 +373,21 @@ def parse_request_date(text: str) -> str | None:
         day = match.group(1).zfill(2)
         month = MONTHS.get(match.group(2).lower(), '00')
         year = match.group(3)
+        return f"{year}-{month}-{day}"
+
+    # Fallback: search in Considerando paragraph
+    # "en fecha dieciséis (16) del mes de enero del año dos mil veinticuatro (2024)...solicitud"
+    match = re.search(
+        r'[Cc]onsiderando.{0,50}?en\s+fecha\s+(\w+)\s*\((\d{1,2})\)\s+del\s+m\w{1,3}\s+de\s+'
+        r'(enero|febrero|marzo|abril|mayo|junio|julio|agosto|'
+        r'septiembre|octubre|noviembre|diciembre)\s+del\s+a[ñn]o.{0,30}\((\d{4})\).{0,300}'
+        r'solicitud',
+        text, re.IGNORECASE | re.DOTALL
+    )
+    if match:
+        day = match.group(2).zfill(2)
+        month = MONTHS.get(match.group(3).lower(), '00')
+        year = match.group(4)
         return f"{year}-{month}-{day}"
 
     return None

@@ -109,6 +109,7 @@ def is_validation_title(title: str) -> bool:
     has_validation = bool(re.search(r'vali', t))
     has_exclusion = bool(re.search(
         r'calificacion|clasificacion|'
+        r'validacion\W*de\W*inv?cremento\W*presupu(?:est|es)|'
         r'(?:\bconstruccion\b.*\b(sala|salas|cine|complejo)\b|'
         r'\b(sala|salas|cine|complejo)\b.*\bconstruccion\b)|'
         r'servicios\W*tecnico',

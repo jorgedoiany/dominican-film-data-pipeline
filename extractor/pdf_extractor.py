@@ -236,6 +236,26 @@ def parse_incentive_article(text: str) -> str | None:
 
 def parse_investor_name(text: str) -> str | None:
     """Extract investor name using OCR-safe stop markers."""
+    def extract_from_inversion_phrase(source_text: str) -> str | None:
+        """Fallback for templates that embed investor name in a legal sentence."""
+        match = re.search(
+            r'en\s+este\s+sentido,\s+la\s+inversi[oó]n\s+realizada\s+por\s+'
+            r'(?:la\s+sociedad\s+)?(.+?)'
+            r'(?=,\s*(?:se\s+encuentra|no\s+se\s+encuentra))',
+            source_text,
+            re.IGNORECASE,
+        )
+        if not match:
+            match = re.search(
+                r'inversi[oó]n\s+realizada\s+por\s+(?:la\s+sociedad\s+)?(.+?)'
+                r'(?=,\s*(?:se\s+encuentra|no\s+se\s+encuentra))',
+                source_text,
+                re.IGNORECASE,
+            )
+        if match:
+            return match.group(1).strip()
+        return None
+
     match = re.search(
         r'[Ss]olicitante\s*[:\-]?\s*(.+?)'
         r'(?=\s+R[\.\s]?N[\.\s:]|\s+[Pp]roductor\s+[Cc]inematogr[áa]fico|'
@@ -247,7 +267,20 @@ def parse_investor_name(text: str) -> str | None:
     if match:
         name = match.group(1).strip()
         name = re.split(r'\s+R[\.\s]?N[\.\s:]+', name)[0].strip()
+
+        # Some templates place a legal clause after "Solicitante" and embed
+        # the actual investor name in "inversion realizada por ...".
+        if re.search(r'^para\s+la\s+aplicaci[oó]n\s+del\s+incentivo', name, re.IGNORECASE):
+            fallback_name = extract_from_inversion_phrase(text)
+            if fallback_name:
+                return fallback_name
+
         return name
+
+    fallback_name = extract_from_inversion_phrase(text)
+    if fallback_name:
+        return fallback_name
+
     return None
 
 
@@ -261,6 +294,11 @@ def parse_rnc(text: str, label: str = 'R.N.C') -> str | None:
     # For base R.N.C label only — try OCR variants
     if label == 'R.N.C':
         match = re.search(r'R[\.\s]?N[\.\s:]+[A-Z]{0,2}\s*([\d\-]+)', text)
+        if match:
+            return match.group(1).strip()
+
+        # Plain RNC: format
+        match = re.search(r'\bRNC\s*[:\-]\s*([\d\-]+)', text)
         if match:
             return match.group(1).strip()
 
@@ -278,9 +316,9 @@ def parse_rnc(text: str, label: str = 'R.N.C') -> str | None:
 
 
 def parse_film_title(text: str) -> str | None:
-    """Extract film title — handles special quote characters."""
+    """Extract film title — handles cinematografica and audiovisual labels."""
     match = re.search(
-        r'[Oo]bra\s+cinematogr[áa]fica\s*[:\-]?\s*'
+        r'[Oo]bra\s+(?:cinematogr[áa]fica|audiovisual)\s*[:\-]?\s*'
         r'[\"\u201c\u201d\u2018\u2019]'
         r'([^\"\u201c\u201d\u2018\u2019\n]+)'
         r'[\"\u201c\u201d\u2018\u2019]',
@@ -393,13 +431,20 @@ def parse_request_date(text: str) -> str | None:
     return None
 
 
+def parse_resolution_type(text: str) -> str:
+    """Determine if resolution approves or rejects the investment."""
+    if re.search(r'PRIMERO\s*:\s*[Ee]ste\s+Consejo\s+rechaza', text):
+        return 'rejected'
+    return 'approved'
+
+
 def parse_resolution_date(text: str, debug: bool = False) -> str | None:
     """Parse resolution date — searches opening paragraph first."""
     def extract_date(text_chunk: str) -> str | None:
-        # Handles: "el/a los quince (15) día/días del mes de enero ... (2026)"
+        # Handles: "el/a los/al quince (15) día/días del mes de enero ... (2026)"
         # Handles: "a los 15 (quince) días del mes de enero ... (2026)"
         match = re.search(
-            r'(?:el|a\s+los?)\s+(\w+)\s*\((\d{1,2})\)\s+d[íi]as?\s+del\s+m\w{1,3}\s+de\s+'
+            r'(?:el|a\s+lo[sa]?|al)\s+(\w+)\s*\((\d{1,2})\)\s+d[íi]as?\s+del\s+m\w{1,3}\s+de\s+'
             r'(enero|febrero|marzo|abril|mayo|junio|julio|agosto|'
             r'septiembre|octubre|noviembre|diciembre)'
             r'.{0,80}\((\d{4})\)',
@@ -417,7 +462,7 @@ def parse_resolution_date(text: str, debug: bool = False) -> str | None:
 
         # Handles: "a los 15 (quince) días"
         match = re.search(
-            r'(?:el|a\s+los?)\s+(\d{1,2})\s*\(\w+\)\s+d[íi]as?\s+del\s+m\w{1,3}\s+de\s+'
+            r'(?:el|a\s+lo[sa]?|al)\s+(\d{1,2})\s*\(\w+\)\s+d[íi]as?\s+del\s+m\w{1,3}\s+de\s+'
             r'(enero|febrero|marzo|abril|mayo|junio|julio|agosto|'
             r'septiembre|octubre|noviembre|diciembre)'
             r'.{0,80}\((\d{4})\)',
@@ -454,6 +499,34 @@ def parse_amount_dop(text: str, keyword: str) -> float | None:
     if match:
         val = parse_amount_value(match.group(1))
         return val
+    return None
+
+
+def parse_validated_amount_dop(text: str) -> float | None:
+    """Parse the validated investment amount from the main resolution text."""
+    amount = parse_amount_dop(text, 'PRIMERO: VALIDAR')
+    if amount is not None:
+        return amount
+
+    # Reconsideration resolutions often move VALIDAR to SEGUNDO.
+    amount = parse_amount_dop(text, 'SEGUNDO: VALIDAR')
+    if amount is not None:
+        return amount
+
+    fallback_patterns = [
+        r'inversi[oó]n.{0,220}?ascendente\s+a\s+la\s+suma(?:\s+de)?(?:\s+[^\(\.;]{1,140})?\s*\(?\s*R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
+        r'realiz[oó]\s+una\s+inversi[oó]n.{0,180}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
+        r'monto\s+de\s+R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+).{0,120}?inversi[oó]n',
+    ]
+
+    for pattern in fallback_patterns:
+        match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+        if not match:
+            continue
+        val = parse_amount_value(match.group(1))
+        if val is not None:
+            return val
+
     return None
 
 
@@ -536,6 +609,7 @@ def build_extraction_quality(
     validated_amount_dop: float | None,
     tax_credit_dop: float | None,
     total_budget_approved: float | None,
+    resolution_type: str = 'approved',
 ) -> tuple[float, bool, list[str]]:
     """Compute a lightweight confidence score and review reasons."""
     score = 1.0
@@ -589,17 +663,19 @@ def build_extraction_quality(
         score -= 0.10
         reasons.append('missing_investor_rnc')
 
-    if validated_amount_dop is None:
-        score -= 0.10
-        reasons.append('missing_validated_amount_dop')
+    # Skip monetary fields for rejected resolutions
+    if resolution_type == 'approved':
+        if validated_amount_dop is None:
+            score -= 0.10
+            reasons.append('missing_validated_amount_dop')
 
-    if tax_credit_dop is None:
-        score -= 0.10
-        reasons.append('missing_tax_credit_dop')
+        if tax_credit_dop is None:
+            score -= 0.10
+            reasons.append('missing_tax_credit_dop')
 
-    if total_budget_approved is None:
-        score -= 0.10
-        reasons.append('missing_total_budget_approved')
+        if total_budget_approved is None:
+            score -= 0.10
+            reasons.append('missing_total_budget_approved')
 
     score = max(0.0, round(score, 2))
     needs_review = len(reasons) > 0
@@ -620,6 +696,7 @@ def extract_cipac_fields(text: str, source_file: str) -> dict:
     pur_number = parse_pur_number(text_norm)
     cpnd_number = parse_cpnd_number(text_norm)
     request_date = parse_request_date(text_norm)
+    resolution_type = parse_resolution_type(text_norm)
 
     investor = parse_investor_name(text_norm)
     production_company = parse_production_company(text_norm)
@@ -638,12 +715,15 @@ def extract_cipac_fields(text: str, source_file: str) -> dict:
     total_budget_approved = parse_total_budget_approved(text_norm)
     total_budget_executed = parse_total_budget_executed(text_norm)
 
-    validated_amount_dop = parse_amount_dop(text_norm, 'PRIMERO: VALIDAR')
-    tax_credit_dop = parse_amount_dop(text_norm, 'SEGUNDO: AUTORIZAR')
+    validated_amount_dop = None
+    tax_credit_dop = None
+    if resolution_type == 'approved':
+        validated_amount_dop = parse_validated_amount_dop(text_norm)
+        tax_credit_dop = parse_amount_dop(text_norm, 'SEGUNDO: AUTORIZAR')
 
-    # Art. 34 fallback: tax_credit = validated_amount (they are always equal)
-    if tax_credit_dop is None and incentive_article == 'art_34' and validated_amount_dop:
-        tax_credit_dop = validated_amount_dop
+        # Art. 34 fallback: tax_credit = validated_amount (they are always equal)
+        if tax_credit_dop is None and incentive_article == 'art_34' and validated_amount_dop:
+            tax_credit_dop = validated_amount_dop
 
     confidence, needs_review, review_reasons = build_extraction_quality(
         resolution_number=resolution_number,
@@ -661,12 +741,14 @@ def extract_cipac_fields(text: str, source_file: str) -> dict:
         validated_amount_dop=validated_amount_dop,
         tax_credit_dop=tax_credit_dop,
         total_budget_approved=total_budget_approved,
+        resolution_type=resolution_type,
     )
 
     return {
         'resolution_number':      resolution_number,
         'year':                   year,
         'incentive_article':      incentive_article,
+        'resolution_type':        resolution_type,
         'investor_name':          investor,
         'investor_rnc':           investor_rnc,
         'film_title':             film_title,
@@ -761,10 +843,12 @@ def insert_cipac_resolution(conn: sqlite3.Connection, fields: dict) -> bool:
         cursor.execute("""
             INSERT OR IGNORE INTO cipac_resolutions (
                 resolution_number,
+                year,
                 movie_id,
                 pur_number,
                 cpnd_number,
                 incentive_article,
+                resolution_type,
                 investor_name,
                 investor_rnc,
                 local_company,
@@ -783,13 +867,15 @@ def insert_cipac_resolution(conn: sqlite3.Connection, fields: dict) -> bool:
                 manually_reviewed,
                 manual_note,
                 source_file
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             fields.get('resolution_number'),
+            fields.get('year'),
             None,
             fields.get('pur_number'),
             fields.get('cpnd_number'),
             fields.get('incentive_article'),
+            fields.get('resolution_type'),
             fields.get('investor_name'),
             fields.get('investor_rnc'),
             fields.get('production_company'),

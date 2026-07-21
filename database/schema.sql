@@ -92,11 +92,13 @@ CREATE TABLE IF NOT EXISTS validation_files (
 CREATE TABLE IF NOT EXISTS cipac_resolutions (
     resolution_id INTEGER PRIMARY KEY AUTOINCREMENT,
     resolution_number TEXT UNIQUE NOT NULL,
+    year TEXT,
     file_id INTEGER REFERENCES validation_files(file_id),
     movie_id TEXT REFERENCES productions(movie_id),
     pur_number TEXT,
     cpnd_number TEXT,
     incentive_article TEXT CHECK(incentive_article IN ('art_34', 'art_39')),
+    resolution_type TEXT DEFAULT 'approved' CHECK(resolution_type IN ('approved', 'rejected')),
     investor_name TEXT,
     investor_rnc TEXT,
     local_company TEXT,

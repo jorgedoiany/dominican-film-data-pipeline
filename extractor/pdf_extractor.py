@@ -180,7 +180,9 @@ def parse_amount_value(raw_amount: str) -> float | None:
     except ValueError:
         return None
 
-    if value > 500_000_000:
+    # Only divide by 100 if value seems unreasonably large (> 10 billion)
+    # This handles OCR errors where decimal point is missing
+    if value > 10_000_000_000:
         value = value / 100
 
     return value
@@ -266,7 +268,7 @@ def parse_investor_name(text: str) -> str | None:
     )
     if match:
         name = match.group(1).strip()
-        name = re.split(r'\s+R[\.\s]?N[\.\s:]+', name)[0].strip()
+        name = re.split(r'\s+R[\.\s]?N[\.\s:C]+', name, flags=re.IGNORECASE)[0].strip()
 
         # Some templates place a legal clause after "Solicitante" and embed
         # the actual investor name in "inversion realizada por ...".
@@ -284,33 +286,64 @@ def parse_investor_name(text: str) -> str | None:
     return None
 
 
-def parse_rnc(text: str, label: str = 'R.N.C') -> str | None:
-    """Extract RNC — tolerant of OCR variants like RN:ES, R.N.C:, R.N.C::, RNC."""
+def validate_rnc(rnc: str) -> bool:
+    """Validate Dominican RNC format: X-XX-XXXXX-X (9 digits total, correct hyphen pattern)."""
+    digits = re.sub(r'[^\d]', '', rnc)
+    if len(digits) != 9:
+        return False
+    # Also validate hyphen pattern: X-XX-XXXXX-X
+    if not re.match(r'^\d{1}-\d{2}-\d{5}-\d{1}$', rnc):
+        return False
+    return True
+
+
+def parse_rnc(text: str, label: str = 'R.N.C', exclude_rnc: str | None = None) -> str | None:
+    """Extract RNC — tolerant of OCR variants like RN:ES, R.N.C:, R.N.C::, RNC.
+
+    Args:
+        text: Normalized document text.
+        label: RNC label to search for.
+        exclude_rnc: RNC value to exclude (e.g. investor RNC when parsing producer RNC).
+    """
+    from collections import Counter
+
+    def is_valid(rnc: str) -> bool:
+        if not validate_rnc(rnc):
+            return False
+        if exclude_rnc and rnc == exclude_rnc:
+            return False
+        return True
+
     pattern = rf'{re.escape(label)}\.?\s*[:\-]{{1,2}}\s*([\d\-]+)'
     match = re.search(pattern, text, re.IGNORECASE)
     if match:
-        return match.group(1).strip()
+        rnc = match.group(1).strip()
+        if is_valid(rnc):
+            return rnc
 
     # For base R.N.C label only — try OCR variants
     if label == 'R.N.C':
         match = re.search(r'R[\.\s]?N[\.\s:]+[A-Z]{0,2}\s*([\d\-]+)', text)
         if match:
-            return match.group(1).strip()
+            rnc = match.group(1).strip()
+            if is_valid(rnc):
+                return rnc
 
         # Plain RNC: format
         match = re.search(r'\bRNC\s*[:\-]\s*([\d\-]+)', text)
         if match:
-            return match.group(1).strip()
+            rnc = match.group(1).strip()
+            if is_valid(rnc):
+                return rnc
 
-    # For R.N.C. Productor — fallback to second RNC occurrence in document
-    # Producer RNC appears exactly twice: once in header (OCR noise) and once
-    # in Considerando paragraph (clean text)
+    # For R.N.C. Productor — fallback to most frequent valid RNC in document
+    # Producer RNC appears twice (header + Considerando), investor RNC appears once
     if label == 'R.N.C. Productor':
         matches = re.findall(r'\b(\d{1}-\d{2}-\d{5}-\d{1})\b', text)
-        if len(matches) >= 2:
-            return matches[1]
-        elif matches:
-            return matches[0]
+        valid_matches = [m for m in matches if is_valid(m)]
+        if valid_matches:
+            counter = Counter(valid_matches)
+            return counter.most_common(1)[0][0]
 
     return None
 
@@ -341,7 +374,7 @@ def parse_production_company(text: str) -> str | None:
     )
     if match:
         company = match.group(1).strip()
-        company = re.split(r'\s+R\.N\.C', company)[0].strip()
+        company = re.split(r'\s+R[\.\s]?N[\.\s:C]+', company, flags=re.IGNORECASE)[0].strip()
         return company
     return None
 
@@ -609,6 +642,7 @@ def build_extraction_quality(
     validated_amount_dop: float | None,
     tax_credit_dop: float | None,
     total_budget_approved: float | None,
+    total_budget_executed: float | None,
     resolution_type: str = 'approved',
 ) -> tuple[float, bool, list[str]]:
     """Compute a lightweight confidence score and review reasons."""
@@ -677,6 +711,10 @@ def build_extraction_quality(
             score -= 0.10
             reasons.append('missing_total_budget_approved')
 
+        if total_budget_executed is None:
+            score -= 0.10
+            reasons.append('missing_total_budget_executed')
+
     score = max(0.0, round(score, 2))
     needs_review = len(reasons) > 0
     return score, needs_review, reasons
@@ -700,16 +738,23 @@ def extract_cipac_fields(text: str, source_file: str) -> dict:
 
     investor = parse_investor_name(text_norm)
     production_company = parse_production_company(text_norm)
-    producer_rnc = parse_rnc(text_norm, 'R.N.C. Productor')
+
+    # Normalize text fields to uppercase
+    if investor:
+        investor = investor.upper()
+    if production_company:
+        production_company = production_company.upper()
 
     if incentive_article == 'art_39':
+        investor_rnc = None
+        producer_rnc = parse_rnc(text_norm, 'R.N.C. Productor')
         if not production_company:
             production_company = investor
             producer_rnc = parse_rnc(text_norm, 'R.N.C')
         investor = None
-        investor_rnc = None
     else:
         investor_rnc = parse_rnc(text_norm, 'R.N.C')
+        producer_rnc = parse_rnc(text_norm, 'R.N.C. Productor', exclude_rnc=investor_rnc)
 
     resolution_date = parse_resolution_date(text_norm)
     total_budget_approved = parse_total_budget_approved(text_norm)
@@ -741,6 +786,7 @@ def extract_cipac_fields(text: str, source_file: str) -> dict:
         validated_amount_dop=validated_amount_dop,
         tax_credit_dop=tax_credit_dop,
         total_budget_approved=total_budget_approved,
+        total_budget_executed=total_budget_executed,
         resolution_type=resolution_type,
     )
 

@@ -112,7 +112,9 @@ def is_validation_title(title: str) -> bool:
         r'validacion\W*de\W*inv?cremento\W*presupu(?:est|es)|'
         r'(?:\bconstruccion\b.*\b(sala|salas|cine|complejo)\b|'
         r'\b(sala|salas|cine|complejo)\b.*\bconstruccion\b)|'
-        r'servicios\W*tecnico',
+        r'servicios\W*tecnico|'
+        r'aprobacion\W*de\W*medida|'
+        r'requerimiento\W*para\W*inclusion',
         t
     ))
     return has_validation and not has_exclusion

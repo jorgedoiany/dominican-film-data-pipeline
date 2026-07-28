@@ -365,8 +365,8 @@ def parse_film_title(text: str) -> str | None:
 def parse_production_company(text: str) -> str | None:
     """Extract production company using OCR-safe stop markers."""
     match = re.search(
-        r'[Pp]roductor\s+[Cc]inematogr[áa]fico\s*[:\-]?\s*(.+?)'
-        r'(?=\s+R[\.\s]?N[\.\s:]|\s+[Pp]ermiso\s+[ÚUu]nico|'
+        r'[Pp]roductor[a]?\s+[Cc]inematogr[áa]fico[a]?\s*[:\-]?\s*(.+?)'
+        r'(?=\s+R[\.\s]?N[\.\s:C]+|\s+[Pp]ermiso\s+[ÚUu]nico|'
         r'\s+[Cc]ertificado\s+[Pp]rovisional|\s+[Oo]bra\s+cinematogr[áa]fica|'
         r'\s+[Ss]olicitante\s*[:\-]?|\s+PRIMERO:|\s+SEGUNDO:|$)',
         text,
@@ -477,7 +477,7 @@ def parse_resolution_date(text: str, debug: bool = False) -> str | None:
         # Handles: "el/a los/al quince (15) día/días del mes de enero ... (2026)"
         # Handles: "a los 15 (quince) días del mes de enero ... (2026)"
         match = re.search(
-            r'(?:el|a\s+lo[sa]?|al)\s+(\w+)\s*\((\d{1,2})\)\s+d[íi]as?\s+del\s+m\w{1,3}\s+de\s+'
+            r'(?:el|a\s+lo[sa]?|al|a)\s+(\w+)\s*\((\d{1,2})\)\s+d[íi]as?\s+del\s+m\w{1,3}\s+de\s+'
             r'(enero|febrero|marzo|abril|mayo|junio|julio|agosto|'
             r'septiembre|octubre|noviembre|diciembre)'
             r'.{0,80}\((\d{4})\)',
@@ -495,7 +495,7 @@ def parse_resolution_date(text: str, debug: bool = False) -> str | None:
 
         # Handles: "a los 15 (quince) días"
         match = re.search(
-            r'(?:el|a\s+lo[sa]?|al)\s+(\d{1,2})\s*\(\w+\)\s+d[íi]as?\s+del\s+m\w{1,3}\s+de\s+'
+            r'(?:el|a\s+lo[sa]?|al|a)\s+(\d{1,2})\s*\(\w+\)\s+d[íi]as?\s+del\s+m\w{1,3}\s+de\s+'
             r'(enero|febrero|marzo|abril|mayo|junio|julio|agosto|'
             r'septiembre|octubre|noviembre|diciembre)'
             r'.{0,80}\((\d{4})\)',
@@ -513,13 +513,39 @@ def parse_resolution_date(text: str, debug: bool = False) -> str | None:
 
         return None
 
+    def extract_date_from_considerando(text_chunk: str) -> str | None:
+        """Fallback: search in DGCINE presentation paragraph."""
+        match = re.search(
+            r'[Cc]onsiderando.{0,100}?'
+            r'(?:en\s+fecha|el\s+d[íi]a)\s+(\w+)\s*\((\d{1,2})\)\s+del\s+m\w{1,3}\s+de\s+'
+            r'(enero|febrero|marzo|abril|mayo|junio|julio|agosto|'
+            r'septiembre|octubre|noviembre|diciembre)'
+            r'.{0,50}\((\d{4})\).{0,200}'
+            r'(?:art[íi]culo\s+(?:13[79]|170)|present[oó]).{0,100}(?:CIPAC|Consejo)',
+            text_chunk, re.IGNORECASE | re.DOTALL
+        )
+        if match:
+            day = match.group(2).zfill(2)
+            month = MONTHS.get(match.group(3).lower(), '00')
+            year = match.group(4)
+            if debug:
+                debug_log("[DEBUG][resolution_date] Considerando pattern matched.")
+                debug_log(f"[DEBUG][resolution_date] parsed='{year}-{month}-{day}'")
+            return f"{year}-{month}-{day}"
+        return None
+
     # Primary — opening paragraph (first 1000 chars)
     result = extract_date(text[:1000])
     if result:
         return result
 
-    # Fallback — full document
+    # Secondary — full document
     result = extract_date(text)
+    if result:
+        return result
+
+    # Fallback — Considerando DGCINE presentation paragraph
+    result = extract_date_from_considerando(text)
     if debug and not result:
         debug_log('[DEBUG][resolution_date] No regex match found.')
     return result
@@ -537,12 +563,21 @@ def parse_amount_dop(text: str, keyword: str) -> float | None:
 
 def parse_validated_amount_dop(text: str) -> float | None:
     """Parse the validated investment amount from the main resolution text."""
+    # Try with and without colon after PRIMERO
     amount = parse_amount_dop(text, 'PRIMERO: VALIDAR')
+    if amount is not None:
+        return amount
+
+    amount = parse_amount_dop(text, 'PRIMERO VALIDAR')
     if amount is not None:
         return amount
 
     # Reconsideration resolutions often move VALIDAR to SEGUNDO.
     amount = parse_amount_dop(text, 'SEGUNDO: VALIDAR')
+    if amount is not None:
+        return amount
+
+    amount = parse_amount_dop(text, 'SEGUNDO VALIDAR')
     if amount is not None:
         return amount
 
@@ -573,6 +608,7 @@ def parse_total_budget_approved(text: str, debug: bool = False) -> float | None:
         r'presupuesto\s+total.{0,220}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
         r'aprob[óo0].{0,100}?pre.{0,30}?total.{0,200}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
         r'presupuesto\s+aprobado\s+ascendente.{0,100}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
+        r'presupuesto\s+aprobado\s+para\s+la\s+producci[oó]n.{0,100}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
     ]
 
     for idx, pattern in enumerate(patterns, start=1):

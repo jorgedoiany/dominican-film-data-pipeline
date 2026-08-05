@@ -96,7 +96,7 @@ def extract_text_ocr(pdf_path: str) -> str | None:
 def extract_text(pdf_path: str) -> str | None:
     """Extract text — try pdfplumber first, fall back to OCR."""
     text = extract_text_pdfplumber(pdf_path)
-    if text and len(text) > 100:
+    if text and len(text) > 100 and 'CIPAC' in text:
         return text
     return extract_text_ocr(pdf_path)
 
@@ -420,43 +420,68 @@ def parse_cpnd_number(text: str) -> str | None:
 
 def parse_request_date(text: str) -> str | None:
     """Parse request date — handles Art. 34, Art. 39 and Considerando formats."""
-    # Art. 34: "Solicitud de fecha 26 de noviembre del 2025"
+    # Art. 34 primary: "Solicitud de fecha 07 de noviembre del 2017"
     match = re.search(
-        r'[Ss]olicitud\s+de\s+fecha\s+(\d{1,2})\s+de\s+'
+        r'[Ss]olicitud\s+de\s+fecha\s+([O0-9]{1,2})\s+de\s+'
         r'(enero|febrero|marzo|abril|mayo|junio|julio|agosto|'
-        r'septiembre|octubre|noviembre|diciembre)\s+del?\s+(\d{4})',
+        r'septiembre|octubre|noviembre|diciembre)\s+(?:del?\s+)?(\d{4})',
         text, re.IGNORECASE
     )
     if match:
-        day = match.group(1).zfill(2)
+        day = match.group(1).replace('O', '0').zfill(2)
+        month = MONTHS.get(match.group(2).lower(), '00')
+        year = match.group(3)
+        return f"{year}-{month}-{day}"
+
+    # Art. 34 variant: "Solicitud de fecha veintitrés (23) de diciembre del dos mil diecisiete (2017)"
+    match = re.search(
+        r'[Ss]olicitud\s+de\s+fecha\s+\w+\s*\(([O0-9]{1,2})\)\s+de\s+'
+        r'(enero|febrero|marzo|abril|mayo|junio|julio|agosto|'
+        r'septiembre|octubre|noviembre|diciembre)\s+del?\s+.{0,40}\((\d{4})\)',
+        text, re.IGNORECASE
+    )
+    if match:
+        day = match.group(1).replace('O', '0').zfill(2)
+        month = MONTHS.get(match.group(2).lower(), '00')
+        year = match.group(3)
+        return f"{year}-{month}-{day}"
+
+    # Art. 34 variant: "Solicitud de fecha veintitrés (23) de diciembre 2019"
+    match = re.search(
+        r'[Ss]olicitud\s+de\s+fecha\s+\w+\s*\(([O0-9]{1,2})\)\s+de\s+'
+        r'(enero|febrero|marzo|abril|mayo|junio|julio|agosto|'
+        r'septiembre|octubre|noviembre|diciembre)\s+(?:del?\s+)?(\d{4})',
+        text, re.IGNORECASE
+    )
+    if match:
+        day = match.group(1).replace('O', '0').zfill(2)
         month = MONTHS.get(match.group(2).lower(), '00')
         year = match.group(3)
         return f"{year}-{month}-{day}"
 
     # Art. 39: "Fecha de solicitud: 21 de mayo del 2026"
     match = re.search(
-        r'[Ff]echa\s+de\s+solicitud\s*:\s*(\d{1,2})\s+de\s+'
+        r'[Ff]echa\s+de\s+solicitud\s*:\s*([O0-9]{1,2})\s+de\s+'
         r'(enero|febrero|marzo|abril|mayo|junio|julio|agosto|'
         r'septiembre|octubre|noviembre|diciembre)\s+del?\s+(\d{4})',
         text, re.IGNORECASE
     )
     if match:
-        day = match.group(1).zfill(2)
+        day = match.group(1).replace('O', '0').zfill(2)
         month = MONTHS.get(match.group(2).lower(), '00')
         year = match.group(3)
         return f"{year}-{month}-{day}"
 
     # Fallback: search in Considerando paragraph
-    # "en fecha dieciséis (16) del mes de enero del año dos mil veinticuatro (2024)...solicitud"
     match = re.search(
-        r'[Cc]onsiderando.{0,50}?en\s+fecha\s+(\w+)\s*\((\d{1,2})\)\s+del\s+m\w{1,3}\s+de\s+'
+        r'[Cc]onsiderando.{0,50}?en\s+fecha\s+(\w+)\s*\(([O0-9]{1,2})\)\s+del\s+m\w{1,3}\s+de\s+'
         r'(enero|febrero|marzo|abril|mayo|junio|julio|agosto|'
         r'septiembre|octubre|noviembre|diciembre)\s+del\s+a[ñn]o.{0,30}\((\d{4})\).{0,300}'
         r'solicitud',
         text, re.IGNORECASE | re.DOTALL
     )
     if match:
-        day = match.group(2).zfill(2)
+        day = match.group(2).replace('O', '0').zfill(2)
         month = MONTHS.get(match.group(3).lower(), '00')
         year = match.group(4)
         return f"{year}-{month}-{day}"
@@ -468,6 +493,8 @@ def parse_resolution_type(text: str) -> str:
     """Determine if resolution approves or rejects the investment."""
     if re.search(r'PRIMERO\s*:\s*[Ee]ste\s+Consejo\s+rechaza', text):
         return 'rejected'
+    if re.search(r'PRIMERO\s*:\s*RECHAZAR', text, re.IGNORECASE):
+        return 'rejected'
     return 'approved'
 
 
@@ -477,7 +504,7 @@ def parse_resolution_date(text: str, debug: bool = False) -> str | None:
         # Handles: "el/a los/al quince (15) día/días del mes de enero ... (2026)"
         # Handles: "a los 15 (quince) días del mes de enero ... (2026)"
         match = re.search(
-            r'(?:el|a\s+lo[sa]?|al|a)\s+(\w+)\s*\((\d{1,2})\)\s+d[íi]as?\s+del\s+m\w{1,3}\s+de\s+'
+            r'(?:el|a\s+lo[sa]?|al|a)\s+([\w\s]+?)\s*\((\d{1,2})\)\s*(?:d[íi]as?\s+)?del\s+m\w{1,3}\s+de\s+'
             r'(enero|febrero|marzo|abril|mayo|junio|julio|agosto|'
             r'septiembre|octubre|noviembre|diciembre)'
             r'.{0,80}\((\d{4})\)',
@@ -607,8 +634,13 @@ def parse_total_budget_approved(text: str, debug: bool = False) -> float | None:
         r'aprob[óo0].{0,100}?presu\w*.{0,260}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
         r'presupuesto\s+total.{0,220}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
         r'aprob[óo0].{0,100}?pre.{0,30}?total.{0,200}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
-        r'presupuesto\s+aprobado\s+ascendente.{0,100}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
+        r'presupuesto\s+aprobado\s+ascendente.{0,200}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
         r'presupuesto\s+aprobado\s+para\s+la\s+producci[oó]n.{0,100}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
+        # 2020 Art. 34 format: "aprobó un presupuesto ascendiente a la suma de [letras] (RD$X)"
+        r'aprob[óo0]\s+un\s+presupuesto\s+ascendiente.{0,400}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
+        r'presupuesto\s+de\s+la\s+obra\s+cinematogr[áa]fica.{0,300}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
+        # 2020 Art. 39 format: "con un presupuesto aprobado ascendente a la suma de [letras] (RD$X)"
+        r'con\s+un\s+presupuesto\s+aprobado\s+ascendente.{0,400}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
     ]
 
     for idx, pattern in enumerate(patterns, start=1):
@@ -635,10 +667,10 @@ def parse_total_budget_approved(text: str, debug: bool = False) -> float | None:
 def parse_total_budget_executed(text: str, debug: bool = False) -> float | None:
     """Parse total executed budget."""
     patterns = [
-        r'ejecuci[oó]n\s+total\s+del\s+presupuesto.{0,260}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
-        r'asciende\s+a\s+la\s+suma\s+de\s+R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
-        r'inversi[oó]n\s+realizada.{0,260}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
+        r'ejecuci[oó]n\s+(?:total|parcial)\s+del\s+presupuesto.{0,400}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
         r'gastos\s+ejecutados.{0,200}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
+        r'gastos\s+v[áa]lidos\s+ascendente.{0,400}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
+        r'ejecuci[oó]n\s+(?:total|parcial).{0,260}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
     ]
 
     for idx, pattern in enumerate(patterns, start=1):
@@ -923,7 +955,7 @@ def insert_cipac_resolution(conn: sqlite3.Connection, fields: dict) -> bool:
     try:
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT OR IGNORE INTO cipac_resolutions (
+            INSERT OR REPLACE INTO cipac_resolutions (
                 resolution_number,
                 year,
                 movie_id,

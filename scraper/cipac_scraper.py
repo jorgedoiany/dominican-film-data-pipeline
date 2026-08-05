@@ -114,7 +114,10 @@ def is_validation_title(title: str) -> bool:
         r'\b(sala|salas|cine|complejo)\b.*\bconstruccion\b)|'
         r'servicios\W*tecnico|'
         r'aprobacion\W*de\W*medida|'
-        r'requerimiento\W*para\W*inclusion',
+        r'requerimiento\W*para\W*inclusion|'
+        r'actualizacion\W*del\W*tarifario|'
+        r'procedimiento\W*adicional|'
+        r'proceso\W*de\W*investigacion',
         t
     ))
     return has_validation and not has_exclusion

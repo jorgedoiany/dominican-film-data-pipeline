@@ -258,6 +258,32 @@ def parse_investor_name(text: str) -> str | None:
             return match.group(1).strip()
         return None
 
+    def extract_from_primero(source_text: str) -> str | None:
+        """Fallback: extract investor name from PRIMERO: VALIDAR paragraph."""
+        match = re.search(
+            r'PRIMERO\s*:?\s*VALIDAR\s+la\s+inversi[oó]n\s+realizada\s+y\s+ejecutada\s+por\s+la\s+sociedad\s+(.+?)'
+            r'(?=,|\s+en\s+la\s+producci[oó]n)',
+            source_text,
+            re.IGNORECASE,
+        )
+        if match:
+            return match.group(1).strip().upper()
+        return None
+
+    def extract_from_detalle(source_text: str) -> str | None:
+        """Fallback: extract investor name from 'Detalle de inversión de' phrase."""
+        match = re.search(
+            r'[Dd]etalle\s+de\s+inversi[oó]n\s+de\s+(.+?)\s+y\s+copia',
+            source_text,
+            re.IGNORECASE,
+        )
+        if match:
+            name = match.group(1).strip().upper()
+            # Remove trailing list numbers like "9."
+            name = re.sub(r'\s+\d+\.$', '', name).strip()
+            return name
+        return None
+
     match = re.search(
         r'[Ss]olicitante\s*[:\-]?\s*(.+?)'
         r'(?=\s+R[\.\s]?N[\.\s:]|\s+[Pp]roductor\s+[Cc]inematogr[áa]fico|'
@@ -270,8 +296,6 @@ def parse_investor_name(text: str) -> str | None:
         name = match.group(1).strip()
         name = re.split(r'\s+R[\.\s]?N[\.\s:C]+', name, flags=re.IGNORECASE)[0].strip()
 
-        # Some templates place a legal clause after "Solicitante" and embed
-        # the actual investor name in "inversion realizada por ...".
         if re.search(r'^para\s+la\s+aplicaci[oó]n\s+del\s+incentivo', name, re.IGNORECASE):
             fallback_name = extract_from_inversion_phrase(text)
             if fallback_name:
@@ -280,6 +304,14 @@ def parse_investor_name(text: str) -> str | None:
         return name
 
     fallback_name = extract_from_inversion_phrase(text)
+    if fallback_name:
+        return fallback_name
+
+    fallback_name = extract_from_primero(text)
+    if fallback_name:
+        return fallback_name
+
+    fallback_name = extract_from_detalle(text)
     if fallback_name:
         return fallback_name
 
@@ -330,7 +362,7 @@ def parse_rnc(text: str, label: str = 'R.N.C', exclude_rnc: str | None = None) -
                 return rnc
 
         # Plain RNC: format
-        match = re.search(r'\bRNC\s*[:\-]\s*([\d\-]+)', text)
+        match = re.search(r'\bRNC\s*[:\-]\s*([\d\-]+)', text, re.IGNORECASE)
         if match:
             rnc = match.group(1).strip()
             if is_valid(rnc):
@@ -380,12 +412,21 @@ def parse_production_company(text: str) -> str | None:
 
 
 def parse_pur_number(text: str) -> str | None:
+    # Standard format: "Permiso Único de Rodaje: 045"
     match = re.search(
-        r'[Pp]ermiso\s+[ÚUuÜü]{1,2}[Nn]ico\s+de\s+[Rr]odaje\s*[:\-]?\s*(\d+)',
+        r'[Pp][eé]rmiso\s+[ÚUu]{1,2}[Nn]ico\s+de\s+[Rr]odaje\s*[:\-]?\s*(\d+)',
         text
     )
     if match:
         return match.group(1).strip()
+
+    # Fallback: search by PUR acronym followed by number
+    matches = re.findall(r'\bPUR\s+(\d+)', text)
+    if matches:
+        from collections import Counter
+        counter = Counter(matches)
+        return counter.most_common(1)[0][0]
+
     return None
 
 

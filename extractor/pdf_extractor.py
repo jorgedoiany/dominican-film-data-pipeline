@@ -677,10 +677,7 @@ def parse_total_budget_approved(text: str, debug: bool = False) -> float | None:
         r'aprob[óo0].{0,100}?pre.{0,30}?total.{0,200}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
         r'presupuesto\s+aprobado\s+ascendente.{0,200}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
         r'presupuesto\s+aprobado\s+para\s+la\s+producci[oó]n.{0,100}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
-        # 2020 Art. 34 format: "aprobó un presupuesto ascendiente a la suma de [letras] (RD$X)"
         r'aprob[óo0]\s+un\s+presupuesto\s+ascendiente.{0,400}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
-        r'presupuesto\s+de\s+la\s+obra\s+cinematogr[áa]fica.{0,300}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
-        # 2020 Art. 39 format: "con un presupuesto aprobado ascendente a la suma de [letras] (RD$X)"
         r'con\s+un\s+presupuesto\s+aprobado\s+ascendente.{0,400}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
     ]
 
@@ -712,6 +709,7 @@ def parse_total_budget_executed(text: str, debug: bool = False) -> float | None:
         r'gastos\s+ejecutados.{0,200}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
         r'gastos\s+v[áa]lidos\s+ascendente.{0,400}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
         r'ejecuci[oó]n\s+(?:total|parcial).{0,260}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
+        r'presupuesto\s+ejecutado.{0,300}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
     ]
 
     for idx, pattern in enumerate(patterns, start=1):
@@ -875,9 +873,15 @@ def extract_cipac_fields(text: str, source_file: str) -> dict:
         validated_amount_dop = parse_validated_amount_dop(text_norm)
         tax_credit_dop = parse_amount_dop(text_norm, 'SEGUNDO: AUTORIZAR')
 
-        # Art. 34 fallback: tax_credit = validated_amount (they are always equal)
-        if tax_credit_dop is None and incentive_article == 'art_34' and validated_amount_dop:
-            tax_credit_dop = validated_amount_dop
+        # Art. 34: validated_amount and tax_credit are always equal
+        # Use tax_credit_dop as the reference — it comes from the cleaner SEGUNDO paragraph
+        if incentive_article == 'art_34':
+            if tax_credit_dop and not validated_amount_dop:
+                validated_amount_dop = tax_credit_dop
+            elif validated_amount_dop and not tax_credit_dop:
+                tax_credit_dop = validated_amount_dop
+            elif tax_credit_dop and validated_amount_dop and tax_credit_dop != validated_amount_dop:
+                validated_amount_dop = tax_credit_dop
 
     confidence, needs_review, review_reasons = build_extraction_quality(
         resolution_number=resolution_number,

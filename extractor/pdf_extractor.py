@@ -8,6 +8,9 @@ from PIL import Image
 import pdfplumber
 import pypdfium2 as pdfium
 
+from dotenv import load_dotenv
+load_dotenv()
+
 
 # ─────────────────────────────────────────
 # CONFIGURATION
@@ -93,12 +96,80 @@ def extract_text_ocr(pdf_path: str) -> str | None:
         return None
 
 
-def extract_text(pdf_path: str) -> str | None:
-    """Extract text — try pdfplumber first, fall back to OCR."""
-    text = extract_text_pdfplumber(pdf_path)
-    if text and len(text) > 100 and 'CIPAC' in text:
-        return text
-    return extract_text_ocr(pdf_path)
+def extract_text_azure(pdf_path: str) -> str | None:
+    """Extract text using Azure OpenAI GPT-4o-mini Vision as fallback."""
+    import base64
+    from openai import AzureOpenAI
+
+    api_key = os.getenv('AZURE_OPENAI_KEY')
+    endpoint = os.getenv('AZURE_OPENAI_ENDPOINT')
+    deployment = os.getenv('AZURE_OPENAI_DEPLOYMENT', 'gpt-4o-mini')
+
+    if not api_key or not endpoint:
+        return None
+
+    try:
+        client = AzureOpenAI(
+            api_key=api_key,
+            azure_endpoint=endpoint,
+            api_version='2024-02-01'
+        )
+
+        pdf = pdfium.PdfDocument(pdf_path)
+        all_text = []
+
+        for page in pdf:
+            bitmap = page.render(scale=2)
+            image = bitmap.to_pil()
+
+            # Convert image to base64
+            import io
+            buffer = io.BytesIO()
+            image.save(buffer, format='PNG')
+            image_b64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+
+            response = client.chat.completions.create(
+                model=deployment,
+                messages=[
+                    {
+                        'role': 'user',
+                        'content': [
+                            {
+                                'type': 'text',
+                                'text': 'Extrae todo el texto de esta imagen de un documento legal dominicano. Devuelve solo el texto, sin comentarios adicionales.'
+                            },
+                            {
+                                'type': 'image_url',
+                                'image_url': {
+                                    'url': f'data:image/png;base64,{image_b64}'
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=2000
+            )
+            all_text.append(response.choices[0].message.content)
+
+        return '\n'.join(all_text)
+
+    except Exception as e:
+        print(f"Azure OCR error on {pdf_path}: {e}")
+        return None
+
+
+def extract_text(pdf_path: str, force_azure: bool = False) -> str | None:
+    """Extract text — try pdfplumber first, fall back to OCR, then Azure."""
+    if not force_azure:
+        text = extract_text_pdfplumber(pdf_path)
+        if text and len(text) > 100 and 'CIPAC' in text:
+            return text
+
+        text = extract_text_ocr(pdf_path)
+        if text and len(text) > 100 and 'CIPAC' in text:
+            return text
+
+    return extract_text_azure(pdf_path)
 
 
 # ─────────────────────────────────────────
@@ -676,6 +747,7 @@ def parse_total_budget_approved(text: str, debug: bool = False) -> float | None:
         r'presupuesto\s+total.{0,220}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
         r'aprob[óo0].{0,100}?pre.{0,30}?total.{0,200}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
         r'presupuesto\s+aprobado\s+ascendente.{0,200}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
+        r'presupuesto\s+aprobado\s+ascendente.{0,200}?\((\d{1,3}(?:,\d{3})*\.\d{2})\)',
         r'presupuesto\s+aprobado\s+para\s+la\s+producci[oó]n.{0,100}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
         r'aprob[óo0]\s+un\s+presupuesto\s+ascendiente.{0,400}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
         r'con\s+un\s+presupuesto\s+aprobado\s+ascendente.{0,400}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
@@ -710,6 +782,7 @@ def parse_total_budget_executed(text: str, debug: bool = False) -> float | None:
         r'gastos\s+v[áa]lidos\s+ascendente.{0,400}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
         r'ejecuci[oó]n\s+(?:total|parcial).{0,260}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
         r'presupuesto\s+ejecutado.{0,300}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
+        r'ejecut[oó]\s+(?:un\s+)?presupuesto.{0,300}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
     ]
 
     for idx, pattern in enumerate(patterns, start=1):
@@ -930,11 +1003,11 @@ def extract_cipac_fields(text: str, source_file: str) -> dict:
     }
 
 
-def process_pdf(pdf_path: str) -> dict | None:
+def process_pdf(pdf_path: str, force_azure: bool = False) -> dict | None:
     """Process a single CIPAC PDF and return extracted fields."""
     print(f"Processing: {os.path.basename(pdf_path)}")
 
-    text = extract_text(pdf_path)
+    text = extract_text(pdf_path, force_azure=force_azure)
     if not text:
         print(f"  Could not extract text from {pdf_path}")
         return None
@@ -943,10 +1016,13 @@ def process_pdf(pdf_path: str) -> dict | None:
     return fields
 
 
-def process_all_pdfs(year_filter: list[str] | None = None) -> list[dict]:
+def process_all_pdfs(year_filter: list[str] | None = None, force_azure: bool = False) -> list[dict]:
     """Process all CIPAC PDFs in the raw data directory."""
     results = []
     cipac_dir = os.path.join(RAW_DATA_DIR, 'cipac')
+
+    # Years with poor scan quality that benefit from Azure OCR
+    AZURE_YEARS = {'2012', '2013'}
 
     if not os.path.exists(cipac_dir):
         print(f"Directory not found: {cipac_dir}")
@@ -960,11 +1036,13 @@ def process_all_pdfs(year_filter: list[str] | None = None) -> list[dict]:
         if year_filter and year not in year_filter:
             continue
 
+        use_azure = force_azure or year in AZURE_YEARS
+
         pdfs = list(year_dir.glob('*.pdf'))
-        print(f"\nYear {year}: {len(pdfs)} PDFs")
+        print(f"\nYear {year}: {len(pdfs)} PDFs {'(Azure)' if use_azure else ''}")
 
         for pdf_path in sorted(pdfs):
-            fields = process_pdf(str(pdf_path))
+            fields = process_pdf(str(pdf_path), force_azure=use_azure)
             if fields:
                 results.append(fields)
 

@@ -475,6 +475,14 @@ def parse_production_company(text: str) -> str | None:
         text,
         re.IGNORECASE,
     )
+    if not match:
+        # Fallback: "Productor: NOMBRE Permiso" — limit to short capture
+        match = re.search(
+            r'[Pp]roductor[a]?\s*:\s*(.{3,80}?)'
+            r'(?=\s+[Pp]ermiso\s+[ÚUu]nico|\s+R[\.\s]?N[\.\s:C]+|\s+[Ff]echa)',
+            text,
+            re.IGNORECASE,
+        )
     if match:
         company = match.group(1).strip()
         company = re.split(r'\s+R[\.\s]?N[\.\s:C]+', company, flags=re.IGNORECASE)[0].strip()
@@ -744,7 +752,7 @@ def parse_total_budget_approved(text: str, debug: bool = False) -> float | None:
         r'presupuesto\s+a\s+aplicar\s+al\s+incentivo.{0,260}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
         r'aprob[óo0].{0,120}?presupuesto.{0,260}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
         r'aprob[óo0].{0,100}?presu\w*.{0,260}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
-        r'presupuesto\s+total.{0,220}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
+        r'presupuesto\s+total\s+(?:aprobado|a\s+aplicar).{0,220}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
         r'aprob[óo0].{0,100}?pre.{0,30}?total.{0,200}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
         r'presupuesto\s+aprobado\s+ascendente.{0,200}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
         r'presupuesto\s+aprobado\s+ascendente.{0,200}?\((\d{1,3}(?:,\d{3})*\.\d{2})\)',
@@ -783,6 +791,7 @@ def parse_total_budget_executed(text: str, debug: bool = False) -> float | None:
         r'ejecuci[oó]n\s+(?:total|parcial).{0,260}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
         r'presupuesto\s+ejecutado.{0,300}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
         r'ejecut[oó]\s+(?:un\s+)?presupuesto.{0,300}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
+        r'ejecuci[oó]n\s+de\s+un\s+presupuesto\s+total.{0,200}?R\s*D\s*[S$\.]{0,2}\s*([\d,\.]+)',
     ]
 
     for idx, pattern in enumerate(patterns, start=1):

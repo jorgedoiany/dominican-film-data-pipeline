@@ -381,12 +381,13 @@ def download_pdf(
 # ─────────────────────────────────────────
 # MAIN SCRAPER
 # ─────────────────────────────────────────
-def scrape_resolutions(download: bool = True) -> list[dict]:
+def scrape_resolutions(download: bool = True, year_filter: str | None = None) -> list[dict]:
     """
     Main scraper — fetch all CIPAC investment validation resolutions.
 
     Args:
-        download: If True, download PDFs. If False, only collect metadata.
+        download:    If True, download PDFs. If False, only collect metadata.
+        year_filter: If set, only scrape and download PDFs for this year.
     """
     print("Starting CIPAC resolutions scraper...")
     print(f"Source: {BASE_URL}")
@@ -397,26 +398,31 @@ def scrape_resolutions(download: bool = True) -> list[dict]:
     all_links: list[dict] = []
 
     # ── 2012-2024: AJAX API ──
-    print("\nScraping 2012-2024 via AJAX API...")
-    for year, cat_id in sorted(YEAR_CATEGORIES.items()):
-        links = scrape_ajax_year(year, cat_id, session)
-        all_links.extend(links)
-        print(f"  {year}: {len(links)} resolutions found")
-        time.sleep(DELAY_SECONDS)
+    if not year_filter or year_filter in YEAR_CATEGORIES:
+        print("\nScraping 2012-2024 via AJAX API...")
+        for year, cat_id in sorted(YEAR_CATEGORIES.items()):
+            if year_filter and year != year_filter:
+                continue
+            links = scrape_ajax_year(year, cat_id, session)
+            all_links.extend(links)
+            print(f"  {year}: {len(links)} resolutions found")
+            time.sleep(DELAY_SECONDS)
 
     # ── 2025-2026: HTML ──
-    print("\nScraping 2025-2026 via HTML...")
-    html_links = scrape_html_years(session)
+    if not year_filter or year_filter in ('2025', '2026'):
+        print("\nScraping 2025-2026 via HTML...")
+        html_links = scrape_html_years(session)
 
-    years_html: dict[str, int] = {}
-    for link in html_links:
-        year = link.get('year') or 'unknown'
-        years_html[year] = years_html.get(year, 0) + 1
+        years_html: dict[str, int] = {}
+        for link in html_links:
+            year = link.get('year') or 'unknown'
+            if year_filter and year != year_filter:
+                continue
+            years_html[year] = years_html.get(year, 0) + 1
+            all_links.append(link)
 
-    for year, count in sorted(years_html.items()):
-        print(f"  {year}: {count} resolutions found")
-
-    all_links.extend(html_links)
+        for year, count in sorted(years_html.items()):
+            print(f"  {year}: {count} resolutions found")
 
     # ── Summary ──
     print(f"\nTotal resolutions found: {len(all_links)}")

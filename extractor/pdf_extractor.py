@@ -1,6 +1,7 @@
 import os
 import re
 import sqlite3
+import json
 from pathlib import Path
 
 import pytesseract
@@ -486,6 +487,9 @@ def parse_production_company(text: str) -> str | None:
     if match:
         company = match.group(1).strip()
         company = re.split(r'\s+R[\.\s]?N[\.\s:C]+', company, flags=re.IGNORECASE)[0].strip()
+        # Reject if result looks like an RNC
+        if re.match(r'^\d[\d\-]+$', company):
+            return None
         return company
     return None
 
@@ -1025,7 +1029,11 @@ def process_pdf(pdf_path: str, force_azure: bool = False) -> dict | None:
     return fields
 
 
-def process_all_pdfs(year_filter: list[str] | None = None, force_azure: bool = False) -> list[dict]:
+def process_all_pdfs(
+    year_filter: list[str] | None = None,
+    force_azure: bool = False,
+    skip_existing: bool = False,
+) -> list[dict]:
     """Process all CIPAC PDFs in the raw data directory."""
     results = []
     cipac_dir = os.path.join(RAW_DATA_DIR, 'cipac')
@@ -1047,10 +1055,21 @@ def process_all_pdfs(year_filter: list[str] | None = None, force_azure: bool = F
 
         use_azure = force_azure or year in AZURE_YEARS
 
-        pdfs = list(year_dir.glob('*.pdf'))
-        print(f"\nYear {year}: {len(pdfs)} PDFs {'(Azure)' if use_azure else ''}")
+        # Load existing results if skip_existing
+        existing_files = set()
+        if skip_existing:
+            json_path = os.path.join('data', f'cipac_{year}_results.json')
+            if os.path.exists(json_path):
+                with open(json_path, encoding='utf-8') as f:
+                    existing = json.load(f)
+                existing_files = {r['source_file'] for r in existing}
+                results.extend(existing)
 
-        for pdf_path in sorted(pdfs):
+        pdfs = list(year_dir.glob('*.pdf'))
+        new_pdfs = [p for p in pdfs if p.name not in existing_files]
+        print(f"\nYear {year}: {len(pdfs)} PDFs total, {len(new_pdfs)} new {'(Azure)' if use_azure else ''}")
+
+        for pdf_path in sorted(new_pdfs):
             fields = process_pdf(str(pdf_path), force_azure=use_azure)
             if fields:
                 results.append(fields)

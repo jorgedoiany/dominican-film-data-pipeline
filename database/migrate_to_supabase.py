@@ -6,7 +6,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 SQLITE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dgcine.db')
-SUPABASE_URL = os.getenv('SUPABASE_DB_URL')
 
 
 def get_sqlite_connection() -> sqlite3.Connection:
@@ -16,7 +15,7 @@ def get_sqlite_connection() -> sqlite3.Connection:
 
 
 def get_postgres_connection():
-    return psycopg2.connect(SUPABASE_URL)
+    return psycopg2.connect(os.getenv('SUPABASE_DB_URL'))
 
 
 def migrate_productions(sqlite_conn, pg_conn) -> int:
@@ -81,7 +80,7 @@ def migrate_cipac_resolutions(sqlite_conn, pg_conn) -> int:
                 total_budget_executed = EXCLUDED.total_budget_executed,
                 manually_reviewed = EXCLUDED.manually_reviewed,
                 manual_note = EXCLUDED.manual_note
-        """, tuple(row)[1:])  # skip resolution_id (auto-generated)
+        """, tuple(row)[1:])
         inserted += 1
 
     pg_conn.commit()

@@ -10,7 +10,7 @@ from extractor.pdf_extractor import (
 )
 
 
-def run_pipeline(years: list[str] | None = None, force_ocr: bool = False) -> None:
+def run_pipeline(years: list[str] | None = None, force_ocr: bool = False, skip_existing: bool = False) -> None:
     """
     Run full CIPAC extraction pipeline:
     1. Load from JSON if exists, otherwise process PDFs with OCR
@@ -19,8 +19,9 @@ def run_pipeline(years: list[str] | None = None, force_ocr: bool = False) -> Non
     4. Fix tax_credit_pct based on incentive_article
 
     Args:
-        years:     List of years to process. None processes all years.
-        force_ocr: If True, re-run OCR even if JSON results already exist.
+        years:         List of years to process. None processes all years.
+        force_ocr:     If True, re-run OCR even if JSON results already exist.
+        skip_existing: If True, skip PDFs already in the JSON.
     """
     print("Starting CIPAC extraction pipeline...")
     print("─" * 50)
@@ -29,13 +30,13 @@ def run_pipeline(years: list[str] | None = None, force_ocr: bool = False) -> Non
     json_path = os.path.join('data', f'cipac_{year_label}_results.json')
 
     # ── Step 1: Load from JSON or process PDFs ──
-    if os.path.exists(json_path) and not force_ocr:
+    if os.path.exists(json_path) and not force_ocr and not skip_existing:
         print(f"\nLoading existing results from: {json_path}")
         with open(json_path, encoding='utf-8') as f:
             results = json.load(f)
         print(f"Loaded {len(results)} results from JSON.")
     else:
-        results = process_all_pdfs(year_filter=years)
+        results = process_all_pdfs(year_filter=years, skip_existing=skip_existing)
         if not results:
             print("No results found.")
             return
@@ -69,10 +70,6 @@ def run_pipeline(years: list[str] | None = None, force_ocr: bool = False) -> Non
 
 
 if __name__ == "__main__":
-    # Usage: python pipeline.py 2026
-    # Usage: python pipeline.py 2025 2026
-    # Usage: python pipeline.py (all years)
-    # Usage: python pipeline.py 2026 --force-ocr
     force_ocr = '--force-ocr' in sys.argv
     years = [y for y in sys.argv[1:] if y != '--force-ocr'] or None
     run_pipeline(years=years, force_ocr=force_ocr)

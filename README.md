@@ -1,5 +1,13 @@
 # Dominican Film Data Pipeline
 
+![Python](https://img.shields.io/badge/Python-3.11+-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Database](https://img.shields.io/badge/Database-Supabase-3ECF8E)
+![OCR](https://img.shields.io/badge/OCR-Tesseract-red)
+![Azure](https://img.shields.io/badge/Azure-GPT--4o--mini-0078D4)
+![Scraper](https://img.shields.io/badge/Scraper-BeautifulSoup-orange)
+![Records](https://img.shields.io/badge/Records-2%2C532-lightgrey)
+
 ETL pipeline for extracting and structuring Dominican Republic film industry data from DGCINE official documents under Law 108-10.
 
 ## Overview
@@ -17,23 +25,25 @@ This pipeline scrapes, processes, and stores CIPAC investment and expense valida
 
 ## Dataset
 
-| Year | Records |
-|------|---------|
-| 2012 | 14 |
-| 2013 | 72 |
-| 2014 | 99 |
-| 2015 | 145 |
-| 2016 | 189 |
-| 2017 | 144 |
-| 2018 | 220 |
-| 2019 | 164 |
-| 2020 | 211 |
-| 2021 | 147 |
-| 2022 | 201 |
-| 2023 | 330 |
-| 2024 | 178 |
-| 2025 | 206 |
-| 2026 | 212 |
+![CIPAC Resolutions by Year](assets/cipac_resolutions_by_year_chart.png)
+
+| Year      | Records   |
+| --------- | --------- |
+| 2012      | 14        |
+| 2013      | 72        |
+| 2014      | 99        |
+| 2015      | 145       |
+| 2016      | 189       |
+| 2017      | 144       |
+| 2018      | 220       |
+| 2019      | 164       |
+| 2020      | 211       |
+| 2021      | 147       |
+| 2022      | 201       |
+| 2023      | 330       |
+| 2024      | 178       |
+| 2025      | 206       |
+| 2026      | 212       |
 | **Total** | **2,532** |
 
 ## Project Structure
@@ -54,7 +64,6 @@ dominican-film-data-pipeline/
 └── data/
 └── raw/cipac/ # Downloaded PDFs (gitignored)
 ```
-
 
 ## Setup
 
@@ -85,7 +94,6 @@ AZURE_OPENAI_ENDPOINT="https://your-service.openai.azure.com/"
 AZURE_OPENAI_DEPLOYMENT="gpt-4o-mini"
 SUPABASE_DB_URL="postgresql://postgres:password@pooler.supabase.com:5432/postgres"
 ```
-
 
 ## Usage
 

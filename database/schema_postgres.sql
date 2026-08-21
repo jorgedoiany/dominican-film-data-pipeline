@@ -35,9 +35,9 @@ CREATE TABLE IF NOT EXISTS cpnd_certificates (
     total_amount_dop FLOAT,
     duration_min INTEGER,
     genre TEXT,
-    issue_date TEXT,
-    renewal_date TEXT,
-    expiry_date TEXT,
+    issue_date DATE,
+    renewal_date DATE,
+    expiry_date DATE,
     validity_years INTEGER,
     is_latest INTEGER DEFAULT 1,
     source_file TEXT
@@ -62,8 +62,8 @@ CREATE TABLE IF NOT EXISTS pur_certificates (
     genre TEXT,
     work_type TEXT CHECK(work_type IN ('cinematografica', 'audiovisual')),
     incentive_type TEXT CHECK(incentive_type IN ('art_34', 'art_39')),
-    issue_date TEXT,
-    expiry_date TEXT,
+    issue_date DATE,
+    expiry_date DATE,
     source_file TEXT
 );
 
@@ -97,8 +97,8 @@ CREATE TABLE IF NOT EXISTS cipac_resolutions (
     producer_rnc TEXT,
     foreign_producer TEXT,
     film_title TEXT,
-    request_date TEXT,
-    resolution_date TEXT,
+    request_date DATE,
+    resolution_date DATE,
     validated_expenses_dop FLOAT,
     tax_credit_dop FLOAT,
     tax_credit_pct FLOAT,

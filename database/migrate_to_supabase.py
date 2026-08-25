@@ -60,7 +60,7 @@ def migrate_cipac_resolutions(sqlite_conn, pg_conn) -> int:
                 cpnd_number, incentive_article, resolution_type,
                 investor_name, investor_rnc, local_company, producer_rnc,
                 foreign_producer, film_title, request_date, resolution_date,
-                validated_expenses_dop, tax_credit_dop, tax_credit_pct,
+                validated_amount_dop, tax_credit_dop, tax_credit_pct,
                 total_budget_approved, total_budget_executed,
                 extraction_confidence, needs_review, review_reasons,
                 manually_reviewed, manual_note, source_file
@@ -74,7 +74,7 @@ def migrate_cipac_resolutions(sqlite_conn, pg_conn) -> int:
                 local_company = EXCLUDED.local_company,
                 producer_rnc = EXCLUDED.producer_rnc,
                 film_title = EXCLUDED.film_title,
-                validated_expenses_dop = EXCLUDED.validated_expenses_dop,
+                validated_amount_dop = EXCLUDED.validated_amount_dop,
                 tax_credit_dop = EXCLUDED.tax_credit_dop,
                 total_budget_approved = EXCLUDED.total_budget_approved,
                 total_budget_executed = EXCLUDED.total_budget_executed,

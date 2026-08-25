@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS cipac_resolutions (
     film_title TEXT,
     request_date DATE,
     resolution_date DATE,
-    validated_expenses_dop FLOAT,
+    validated_amount_dop FLOAT,
     tax_credit_dop FLOAT,
     tax_credit_pct FLOAT,
     total_budget_approved FLOAT,

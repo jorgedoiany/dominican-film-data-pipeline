@@ -1122,7 +1122,7 @@ def insert_cipac_resolution(conn: sqlite3.Connection, fields: dict) -> bool:
                 film_title,
                 request_date,
                 resolution_date,
-                validated_expenses_dop,
+                validated_amount_dop,
                 tax_credit_dop,
                 total_budget_approved,
                 total_budget_executed,

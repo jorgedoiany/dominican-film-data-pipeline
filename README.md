@@ -25,7 +25,7 @@ This pipeline scrapes, processes, and stores CIPAC investment and expense valida
 
 ## Dataset
 
-![CIPAC Resolutions by Year](assets/cipac_resolutions_by_year_chart.png)
+![CIPAC Resolutions by Year](/assets/cipac_resolutions_by_year_chart.png)
 
 | Year      | Records   |
 | --------- | --------- |

@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS cipac_resolutions (
     resolution_type TEXT DEFAULT 'approved' CHECK(resolution_type IN ('approved', 'rejected')),
     investor_name TEXT,
     investor_rnc TEXT,
-    local_company TEXT,
+    production_company TEXT,
     producer_rnc TEXT,
     foreign_producer TEXT,
     film_title TEXT,

@@ -1116,7 +1116,7 @@ def insert_cipac_resolution(conn: sqlite3.Connection, fields: dict) -> bool:
                 resolution_type,
                 investor_name,
                 investor_rnc,
-                local_company,
+                production_company,
                 producer_rnc,
                 foreign_producer,
                 film_title,

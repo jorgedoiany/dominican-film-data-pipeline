@@ -58,7 +58,7 @@ def migrate_cipac_resolutions(sqlite_conn, pg_conn) -> int:
             INSERT INTO cipac_resolutions (
                 resolution_number, year, file_id, movie_id, pur_number,
                 cpnd_number, incentive_article, resolution_type,
-                investor_name, investor_rnc, local_company, producer_rnc,
+                investor_name, investor_rnc, production_company, producer_rnc,
                 foreign_producer, film_title, request_date, resolution_date,
                 validated_amount_dop, tax_credit_dop, tax_credit_pct,
                 total_budget_approved, total_budget_executed,
@@ -71,7 +71,7 @@ def migrate_cipac_resolutions(sqlite_conn, pg_conn) -> int:
             ON CONFLICT (resolution_number) DO UPDATE SET
                 investor_name = EXCLUDED.investor_name,
                 investor_rnc = EXCLUDED.investor_rnc,
-                local_company = EXCLUDED.local_company,
+                production_company = EXCLUDED.production_company,
                 producer_rnc = EXCLUDED.producer_rnc,
                 film_title = EXCLUDED.film_title,
                 validated_amount_dop = EXCLUDED.validated_amount_dop,

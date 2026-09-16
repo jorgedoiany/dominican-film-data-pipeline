@@ -10,6 +10,8 @@
 
 ETL pipeline for extracting and structuring Dominican Republic film industry data from DGCINE official documents under Law 108-10.
 
+> **Note:** This repository is under active development. The latest code and data are available on the [`develop`](../../tree/develop) branch.
+
 ## Overview
 
 This pipeline scrapes, processes, and stores CIPAC investment and expense validation resolutions issued by the [Dominican Film Commission (DGCINE)](https://dgcine.gob.do) between 2012 and 2026. It uses OCR, Azure GPT-4o-mini Vision, and regex-based extraction to structure data from PDF documents into a PostgreSQL database hosted on Supabase.

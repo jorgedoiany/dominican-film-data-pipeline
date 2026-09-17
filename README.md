@@ -6,7 +6,7 @@
 ![OCR](https://img.shields.io/badge/OCR-Tesseract-red)
 ![Azure](https://img.shields.io/badge/Azure-GPT--4o--mini-0078D4)
 ![Scraper](https://img.shields.io/badge/Scraper-BeautifulSoup-orange)
-![Records](https://img.shields.io/badge/Records-2%2C532-lightgrey)
+![Records](https://img.shields.io/badge/Records-2%2C543-orange)
 
 ETL pipeline for extracting and structuring Dominican Republic film industry data from DGCINE official documents under Law 108-10.
 

@@ -106,6 +106,10 @@ python pipeline.py 2026
 python pipeline.py 2026 --force-ocr
 ```
 
+`--force-ocr` re-runs OCR extraction on all PDFs for the given year, even if results
+already exist. Fields set through manual review (`manually_reviewed`, `manual_note`)
+are preserved across reprocessing — see [Data Quality Notes](#data-quality-notes).
+
 ### Incremental update (new resolutions only)
 
 ```bash
@@ -123,6 +127,19 @@ python database/migrate_to_supabase.py
 **Art. 34** — Dominican productions. Local investors receive a tax credit equal to 100% of their validated investment, applicable against income tax (ISR).
 
 **Art. 39** — Foreign productions. Producers receive a transferable tax credit of 25% of validated expenses in the Dominican Republic (minimum USD 500,000).
+
+## Data Quality Notes
+
+- PDF extraction uses OCR and produces a confidence score per record. Low-confidence
+  extractions are flagged with `needs_review: true` and listed in the pipeline's
+  extraction summary.
+- Records can be corrected by hand; corrections are tracked in the `manually_reviewed`
+  and `manual_note` fields, with the note recording the field changed, the source of
+  the correction, and the date.
+- Reprocessing a year with `--force-ocr` re-runs extraction on every PDF for that year,
+  but does not discard manual corrections: `manually_reviewed` and `manual_note` are
+  loaded from the existing results and carried over to the newly extracted record,
+  matched by `source_file`. All other fields are recalculated normally.
 
 ## Author
 

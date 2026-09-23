@@ -1038,7 +1038,6 @@ def process_all_pdfs(
     results = []
     cipac_dir = os.path.join(RAW_DATA_DIR, 'cipac')
 
-    # Years with poor scan quality that benefit from Azure OCR
     AZURE_YEARS = {'2012', '2013'}
 
     if not os.path.exists(cipac_dir):
@@ -1055,13 +1054,24 @@ def process_all_pdfs(
 
         use_azure = force_azure or year in AZURE_YEARS
 
-        # Load existing results if skip_existing
+        # Load existing results (always, if present) to:
+        #   (a) know which files to skip when skip_existing=True
+        #   (b) preserve manual review fields when reprocessing
         existing_files = set()
-        if skip_existing:
-            json_path = os.path.join('data', f'cipac_{year}_results.json')
-            if os.path.exists(json_path):
-                with open(json_path, encoding='utf-8') as f:
-                    existing = json.load(f)
+        manual_reviews = {}  # source_file -> {'manually_reviewed': ..., 'manual_note': ...}
+        json_path = os.path.join('data', f'cipac_{year}_results.json')
+        if os.path.exists(json_path):
+            with open(json_path, encoding='utf-8') as f:
+                existing = json.load(f)
+            manual_reviews = {
+                r['source_file']: {
+                    'manually_reviewed': r.get('manually_reviewed', False),
+                    'manual_note': r.get('manual_note'),
+                }
+                for r in existing
+                if r.get('manually_reviewed')
+            }
+            if skip_existing:
                 existing_files = {r['source_file'] for r in existing}
                 results.extend(existing)
 
@@ -1072,6 +1082,10 @@ def process_all_pdfs(
         for pdf_path in sorted(new_pdfs):
             fields = process_pdf(str(pdf_path), force_azure=use_azure)
             if fields:
+                prior_review = manual_reviews.get(pdf_path.name)
+                if prior_review:
+                    fields['manually_reviewed'] = prior_review['manually_reviewed']
+                    fields['manual_note'] = prior_review['manual_note']
                 results.append(fields)
 
     return results

@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS productions (
 -- Can be modified/renewed — is_latest tracks most recent version
 CREATE TABLE IF NOT EXISTS cpnd_certificates (
     cpnd_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    cpnd_number TEXT NOT NULL,
+    cpnd_number TEXT UNIQUE NOT NULL,
     project_id TEXT REFERENCES productions(project_id),
     title TEXT NOT NULL,
     production_company TEXT,

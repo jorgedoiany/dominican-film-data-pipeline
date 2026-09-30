@@ -56,7 +56,8 @@ dominican-film-data-pipeline/
 │ ├── db_setup.py # SQLite setup and connection
 │ ├── schema.sql # SQLite schema
 │ ├── schema_postgres.sql # PostgreSQL schema (Supabase)
-│ └── migrate_to_supabase.py # Migration script
+│ ├── migrate_to_supabase.py # Migration script
+│ └── migrations/ # One-off schema migrations
 ├── extractor/
 │ └── pdf_extractor.py # OCR + field parsers + Azure Vision fallback
 ├── scraper/
@@ -66,6 +67,25 @@ dominican-film-data-pipeline/
 └── data/
 └── raw/cipac/ # Downloaded PDFs (gitignored)
 ```
+
+## Database Schema
+
+The database is on schema **v2.0**. Every table that refers to a film uses `project_id`, the PUR identifier of the project (for example `PUR-0861`). The PUR number is the link between all the documents of a project, so `project_id` joins the master table with its certificates, validation files and resolutions.
+
+| Table               | Content                                                        | Rows (2026-09-30) |
+| ------------------- | -------------------------------------------------------------- | ----------------- |
+| `productions`       | Master table, one row per project, loaded from `01_movies.csv` | 598               |
+| `cpnd_certificates` | CPND certificates (Art. 34)                                    | 0                 |
+| `pur_certificates`  | PUR certificates                                               | 0                 |
+| `validation_files`  | Validation files                                               | 0                 |
+| `cipac_resolutions` | One row per CIPAC resolution                                   | 2,543             |
+
+The three certificate and validation tables are created but not populated yet.
+
+- `productions` has the 21 columns of `01_movies.csv`, with `project_id` as primary key. There, `pur_number` and `cpnd_number` are integers. In `cipac_resolutions` they are text with leading zeros (for example `025`), so join on `project_id`, not on `pur_number`.
+- `cipac_resolutions.project_id` is resolved when a resolution is inserted: the numeric PUR number is looked up in `productions`. It stays `NULL` when there is no match.
+- `cpnd_certificates.cpnd_number` is unique, so the table keeps one row per CPND number.
+- `01_movies.csv` is maintained in the dashboard repository. `db_setup.py` reads it from `../dominican-film-dashboard/data/01_movies.csv`, so both repositories must sit side by side.
 
 ## Setup
 
@@ -119,8 +139,30 @@ python update.py 2026
 ### Migrate to Supabase
 
 ```bash
+# Upsert productions and resolutions into the existing tables
 python database/migrate_to_supabase.py
+
+# Run everything inside a transaction, print the counts and roll back
+python database/migrate_to_supabase.py --dry-run
+
+# Destructive: drop and recreate all tables from schema_postgres.sql
+# (asks you to type RECREATE before continuing)
+python database/migrate_to_supabase.py --recreate-schema
 ```
+
+The script stops if the local SQLite database is not on schema v2.0. All changes run in a single transaction, so a failure leaves Supabase as it was.
+
+### Migrate an existing SQLite database from schema v1.0
+
+Only needed for a database created before `project_id` was introduced. Back up `dgcine.db` first.
+
+```bash
+python database/migrations/001_movie_id_to_project_id.py \
+  --db database/dgcine.db \
+  --csv ../dominican-film-dashboard/data/01_movies.csv
+```
+
+The script recreates `productions` from `01_movies.csv`, copies every row of `cipac_resolutions` (checking that each row, including the manual review fields, is identical before dropping the old table) and fills `project_id`. It refuses to run on a database that is already on v2.0.
 
 ## Law 108-10 Context
 
@@ -140,6 +182,12 @@ python database/migrate_to_supabase.py
   but does not discard manual corrections: `manually_reviewed` and `manual_note` are
   loaded from the existing results and carried over to the newly extracted record,
   matched by `source_file`. All other fields are recalculated normally.
+
+## Known Limitations
+
+- **Resolutions without a linked production.** 2,537 of the 2,543 resolutions have a `project_id`. The other six do not: `CIPAC-2014-039` has no PUR number, and the productions for PUR 343 (`CIPAC-2018-065`, `CIPAC-2019-001`), PUR 365 (`CIPAC-2018-173`) and PUR 414 (`CIPAC-2019-023`, `CIPAC-2019-024`) are not in `01_movies.csv`. Their `pur_number` is kept.
+- **Certificate tables are empty.** `cpnd_certificates`, `pur_certificates` and `validation_files` have no data yet.
+- **Productions live outside this repository.** The pipeline reads `01_movies.csv` from the dashboard repository, using a relative path.
 
 ## Author
 

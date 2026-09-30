@@ -11,27 +11,27 @@ SCHEMA_PATH = os.path.join(BASE_DIR, 'schema.sql')
 DB_PATH = os.path.join(BASE_DIR, 'dgcine.db')
 
 
-def create_database() -> None:
+def create_database(db_path: str = DB_PATH) -> None:
     """Create the SQLite database from schema.sql."""
     print("Creating database...")
 
     with open(SCHEMA_PATH, 'r', encoding='utf-8') as f:
         schema = f.read()
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.executescript(schema)
     conn.commit()
     conn.close()
 
-    print(f"Database created at: {DB_PATH}")
+    print(f"Database created at: {db_path}")
 
 
-def get_connection() -> sqlite3.Connection:
+def get_connection(db_path: str = DB_PATH) -> sqlite3.Connection:
     """Return a connection to the database."""
-    if not os.path.exists(DB_PATH):
-        create_database()
-    return sqlite3.connect(DB_PATH)
+    if not os.path.exists(db_path):
+        create_database(db_path)
+    return sqlite3.connect(db_path)
 
 
 def get_table_info() -> None:
@@ -52,49 +52,56 @@ def get_table_info() -> None:
     conn.close()
 
 
-def load_productions(csv_path: str) -> None:
-    """Load productions from 01_movies.csv into the database."""
+PRODUCTION_COLUMNS = [
+    'project_id', 'film_title', 'commercial_title', 'pur_number', 'cpnd_number',
+    'production_year', 'release_date', 'type', 'genre', 'duration_min',
+    'country_of_origin', 'coproduction_country', 'production_origin', 'status',
+    'director', 'screenplay_author', 'production_company', 'short_synopsis',
+    'synopsis_source', 'total_budget_approved', 'original_language',
+]
+PRODUCTION_INT_COLUMNS = {'pur_number', 'cpnd_number', 'production_year', 'duration_min'}
+PRODUCTION_FLOAT_COLUMNS = {'total_budget_approved'}
+
+
+def load_productions(csv_path: str, db_path: str = DB_PATH) -> None:
+    """Load productions from 01_movies.csv (upsert by project_id)."""
     print(f"Loading productions from {csv_path}...")
 
     df = pd.read_csv(csv_path, sep=';', encoding='utf-8-sig')
 
-    df = df.rename(columns={
-        'movie_id':             'movie_id',
-        'title':                'title',
-        'production_year':      'production_year',
-        'release_year':         'release_year',
-        'genre':                'genre',
-        'duration_min':         'duration_min',
-        'coproduction_country': 'coproduction_country',
-        'status':               'status',
-        'director':             'director',
-        'screenplay_author':    'screenplay_author',
-        'production_company':   'production_company',
-        'short_synopsis':       'short_synopsis',
-        'synopsis_source':      'synopsis_source',
-        'approx_budget':        'approx_budget',
-        'original_language':    'original_language',
-    })
+    missing = set(PRODUCTION_COLUMNS) - set(df.columns)
+    extra = set(df.columns) - set(PRODUCTION_COLUMNS)
+    if missing or extra:
+        raise ValueError(f"Unexpected CSV columns. Missing: {sorted(missing)}. Extra: {sorted(extra)}.")
+    if df['project_id'].isna().any() or df['project_id'].duplicated().any():
+        raise ValueError("project_id must be present and unique in every row.")
+    if df['film_title'].isna().any():
+        raise ValueError("film_title must be present in every row.")
 
-    df['production_type'] = 'dominican'
-    df['incentive_type'] = 'unknown'
+    def clean(value, column):
+        if pd.isna(value):
+            return None
+        if column in PRODUCTION_INT_COLUMNS:
+            return int(value)
+        if column in PRODUCTION_FLOAT_COLUMNS:
+            return float(value)
+        return value
 
-    db_columns = [
-        'movie_id', 'title', 'production_year', 'release_year',
-        'genre', 'duration_min', 'coproduction_country', 'status',
-        'director', 'screenplay_author', 'production_company',
-        'short_synopsis', 'synopsis_source', 'approx_budget',
-        'original_language', 'production_type', 'incentive_type'
+    rows = [
+        tuple(clean(row[col], col) for col in PRODUCTION_COLUMNS)
+        for _, row in df[PRODUCTION_COLUMNS].iterrows()
     ]
 
-    df = df[[col for col in db_columns if col in df.columns]]
-
-    conn = get_connection()
-    df.to_sql('productions', conn, if_exists='replace', index=False)
+    placeholders = ','.join('?' * len(PRODUCTION_COLUMNS))
+    conn = get_connection(db_path)
+    conn.executemany(
+        f"INSERT OR REPLACE INTO productions ({', '.join(PRODUCTION_COLUMNS)}) VALUES ({placeholders})",
+        rows,
+    )
     conn.commit()
     conn.close()
 
-    print(f"Loaded {len(df)} productions into database.")
+    print(f"Loaded {len(rows)} productions into database.")
 
 
 def fix_tax_credit_pct(conn: sqlite3.Connection, results: list[dict]) -> None:

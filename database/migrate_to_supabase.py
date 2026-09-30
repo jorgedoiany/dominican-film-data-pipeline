@@ -69,17 +69,32 @@ def migrate_cipac_resolutions(sqlite_conn, pg_conn) -> int:
                 %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
             )
             ON CONFLICT (resolution_number) DO UPDATE SET
+                year = EXCLUDED.year,
+                file_id = EXCLUDED.file_id,
+                movie_id = EXCLUDED.movie_id,
+                pur_number = EXCLUDED.pur_number,
+                cpnd_number = EXCLUDED.cpnd_number,
+                incentive_article = EXCLUDED.incentive_article,
+                resolution_type = EXCLUDED.resolution_type,
                 investor_name = EXCLUDED.investor_name,
                 investor_rnc = EXCLUDED.investor_rnc,
                 production_company = EXCLUDED.production_company,
                 producer_rnc = EXCLUDED.producer_rnc,
+                foreign_producer = EXCLUDED.foreign_producer,
                 film_title = EXCLUDED.film_title,
+                request_date = EXCLUDED.request_date,
+                resolution_date = EXCLUDED.resolution_date,
                 validated_amount_dop = EXCLUDED.validated_amount_dop,
                 tax_credit_dop = EXCLUDED.tax_credit_dop,
+                tax_credit_pct = EXCLUDED.tax_credit_pct,
                 total_budget_approved = EXCLUDED.total_budget_approved,
                 total_budget_executed = EXCLUDED.total_budget_executed,
+                extraction_confidence = EXCLUDED.extraction_confidence,
+                needs_review = EXCLUDED.needs_review,
+                review_reasons = EXCLUDED.review_reasons,
                 manually_reviewed = EXCLUDED.manually_reviewed,
-                manual_note = EXCLUDED.manual_note
+                manual_note = EXCLUDED.manual_note,
+                source_file = EXCLUDED.source_file
         """, tuple(row)[1:])
         inserted += 1
 

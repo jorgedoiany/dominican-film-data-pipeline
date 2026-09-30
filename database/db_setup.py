@@ -11,27 +11,27 @@ SCHEMA_PATH = os.path.join(BASE_DIR, 'schema.sql')
 DB_PATH = os.path.join(BASE_DIR, 'dgcine.db')
 
 
-def create_database() -> None:
+def create_database(db_path: str = DB_PATH) -> None:
     """Create the SQLite database from schema.sql."""
     print("Creating database...")
 
     with open(SCHEMA_PATH, 'r', encoding='utf-8') as f:
         schema = f.read()
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.executescript(schema)
     conn.commit()
     conn.close()
 
-    print(f"Database created at: {DB_PATH}")
+    print(f"Database created at: {db_path}")
 
 
-def get_connection() -> sqlite3.Connection:
+def get_connection(db_path: str = DB_PATH) -> sqlite3.Connection:
     """Return a connection to the database."""
-    if not os.path.exists(DB_PATH):
-        create_database()
-    return sqlite3.connect(DB_PATH)
+    if not os.path.exists(db_path):
+        create_database(db_path)
+    return sqlite3.connect(db_path)
 
 
 def get_table_info() -> None:
@@ -63,7 +63,7 @@ PRODUCTION_INT_COLUMNS = {'pur_number', 'cpnd_number', 'production_year', 'durat
 PRODUCTION_FLOAT_COLUMNS = {'total_budget_approved'}
 
 
-def load_productions(csv_path: str) -> None:
+def load_productions(csv_path: str, db_path: str = DB_PATH) -> None:
     """Load productions from 01_movies.csv (upsert by project_id)."""
     print(f"Loading productions from {csv_path}...")
 
@@ -93,7 +93,7 @@ def load_productions(csv_path: str) -> None:
     ]
 
     placeholders = ','.join('?' * len(PRODUCTION_COLUMNS))
-    conn = get_connection()
+    conn = get_connection(db_path)
     conn.executemany(
         f"INSERT OR REPLACE INTO productions ({', '.join(PRODUCTION_COLUMNS)}) VALUES ({placeholders})",
         rows,

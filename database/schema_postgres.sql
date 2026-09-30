@@ -1,33 +1,39 @@
 -- ─────────────────────────────────────────
 -- DOMINICAN FILM INDUSTRY DATABASE
--- Schema Version: 1.0 (PostgreSQL)
+-- Schema Version: 2.0 (PostgreSQL)
 -- ─────────────────────────────────────────
 -- ── Productions (master table) ──
+-- One row per project. project_id is the PUR identifier (e.g. PUR-0861),
+-- the key that links certificates, validation files and resolutions.
 CREATE TABLE IF NOT EXISTS productions (
-    movie_id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
+    project_id TEXT PRIMARY KEY,
+    film_title TEXT NOT NULL,
+    commercial_title TEXT,
+    pur_number INTEGER,
+    cpnd_number INTEGER,
     production_year INTEGER,
-    release_year INTEGER,
+    release_date DATE,
+    type TEXT,
     genre TEXT,
     duration_min INTEGER,
+    country_of_origin TEXT,
     coproduction_country TEXT,
+    production_origin TEXT,
     status TEXT,
     director TEXT,
     screenplay_author TEXT,
     production_company TEXT,
     short_synopsis TEXT,
     synopsis_source TEXT,
-    approx_budget FLOAT,
-    original_language TEXT,
-    production_type TEXT CHECK(production_type IN ('dominican', 'foreign')),
-    incentive_type TEXT CHECK(incentive_type IN ('art_34', 'art_39', 'none'))
+    total_budget_approved FLOAT,
+    original_language TEXT
 );
 
 -- ── CPND Certificates ──
 CREATE TABLE IF NOT EXISTS cpnd_certificates (
     cpnd_id SERIAL PRIMARY KEY,
     cpnd_number TEXT UNIQUE NOT NULL,
-    movie_id TEXT REFERENCES productions(movie_id),
+    project_id TEXT REFERENCES productions(project_id),
     title TEXT NOT NULL,
     production_company TEXT,
     director TEXT,
@@ -47,7 +53,7 @@ CREATE TABLE IF NOT EXISTS cpnd_certificates (
 CREATE TABLE IF NOT EXISTS pur_certificates (
     pur_id SERIAL PRIMARY KEY,
     pur_number TEXT UNIQUE NOT NULL,
-    movie_id TEXT REFERENCES productions(movie_id),
+    project_id TEXT REFERENCES productions(project_id),
     cpnd_number TEXT REFERENCES cpnd_certificates(cpnd_number),
     title TEXT NOT NULL,
     producer TEXT,
@@ -71,13 +77,13 @@ CREATE TABLE IF NOT EXISTS pur_certificates (
 CREATE TABLE IF NOT EXISTS validation_files (
     file_id SERIAL PRIMARY KEY,
     file_number INTEGER NOT NULL,
-    movie_id TEXT REFERENCES productions(movie_id),
+    project_id TEXT REFERENCES productions(project_id),
     pur_number TEXT REFERENCES pur_certificates(pur_number),
     fiscal_year INTEGER NOT NULL,
     incentive_type TEXT CHECK(incentive_type IN ('art_34', 'art_39')),
     total_validated_usd FLOAT,
     total_credit_usd FLOAT,
-    UNIQUE(movie_id, file_number)
+    UNIQUE(project_id, file_number)
 );
 
 -- ── CIPAC Resolutions ──
@@ -86,7 +92,7 @@ CREATE TABLE IF NOT EXISTS cipac_resolutions (
     resolution_number TEXT UNIQUE NOT NULL,
     year TEXT,
     file_id INTEGER REFERENCES validation_files(file_id),
-    movie_id TEXT REFERENCES productions(movie_id),
+    project_id TEXT REFERENCES productions(project_id),
     pur_number TEXT,
     cpnd_number TEXT,
     incentive_article TEXT CHECK(incentive_article IN ('art_34', 'art_39')),
@@ -113,16 +119,16 @@ CREATE TABLE IF NOT EXISTS cipac_resolutions (
 );
 
 -- ── Indexes ──
-CREATE INDEX IF NOT EXISTS idx_cpnd_movie ON cpnd_certificates(movie_id);
+CREATE INDEX IF NOT EXISTS idx_cpnd_project ON cpnd_certificates(project_id);
 
-CREATE INDEX IF NOT EXISTS idx_pur_movie ON pur_certificates(movie_id);
+CREATE INDEX IF NOT EXISTS idx_pur_project ON pur_certificates(project_id);
 
 CREATE INDEX IF NOT EXISTS idx_pur_cpnd ON pur_certificates(cpnd_number);
 
-CREATE INDEX IF NOT EXISTS idx_vf_movie ON validation_files(movie_id);
+CREATE INDEX IF NOT EXISTS idx_vf_project ON validation_files(project_id);
 
 CREATE INDEX IF NOT EXISTS idx_vf_pur ON validation_files(pur_number);
 
-CREATE INDEX IF NOT EXISTS idx_cipac_movie ON cipac_resolutions(movie_id);
+CREATE INDEX IF NOT EXISTS idx_cipac_project ON cipac_resolutions(project_id);
 
 CREATE INDEX IF NOT EXISTS idx_cipac_file ON cipac_resolutions(file_id);

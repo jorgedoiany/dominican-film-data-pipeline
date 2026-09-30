@@ -1115,6 +1115,18 @@ def print_review_summary(results: list[dict]) -> None:
 # ─────────────────────────────────────────
 # DATABASE INSERTION
 # ─────────────────────────────────────────
+def lookup_project_id(conn: sqlite3.Connection, pur_number) -> "str | None":
+    """Return the productions.project_id matching a resolution's pur_number, or None."""
+    try:
+        number = int(str(pur_number).strip())
+    except (TypeError, ValueError):
+        return None
+    row = conn.execute(
+        'SELECT project_id FROM productions WHERE pur_number = ?', (number,)
+    ).fetchone()
+    return row[0] if row else None
+
+
 def insert_cipac_resolution(conn: sqlite3.Connection, fields: dict) -> bool:
     """Insert extracted fields into cipac_resolutions table."""
     try:
@@ -1123,7 +1135,7 @@ def insert_cipac_resolution(conn: sqlite3.Connection, fields: dict) -> bool:
             INSERT OR REPLACE INTO cipac_resolutions (
                 resolution_number,
                 year,
-                movie_id,
+                project_id,
                 pur_number,
                 cpnd_number,
                 incentive_article,
@@ -1150,7 +1162,7 @@ def insert_cipac_resolution(conn: sqlite3.Connection, fields: dict) -> bool:
         """, (
             fields.get('resolution_number'),
             fields.get('year'),
-            None,
+            lookup_project_id(conn, fields.get('pur_number')),
             fields.get('pur_number'),
             fields.get('cpnd_number'),
             fields.get('incentive_article'),

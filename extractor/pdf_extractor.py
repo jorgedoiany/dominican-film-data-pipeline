@@ -1035,6 +1035,7 @@ def process_all_pdfs(
     skip_existing: bool = False,
 ) -> list[dict]:
     """Process all CIPAC PDFs in the raw data directory."""
+    from extractor.manual_corrections import carry_over, refresh_review_flags
     results = []
     cipac_dir = os.path.join(RAW_DATA_DIR, 'cipac')
 
@@ -1058,19 +1059,12 @@ def process_all_pdfs(
         #   (a) know which files to skip when skip_existing=True
         #   (b) preserve manual review fields when reprocessing
         existing_files = set()
-        manual_reviews = {}  # source_file -> {'manually_reviewed': ..., 'manual_note': ...}
+        manual_reviews = {}  # source_file -> previous record (manually reviewed ones only)
         json_path = os.path.join('data', f'cipac_{year}_results.json')
         if os.path.exists(json_path):
             with open(json_path, encoding='utf-8') as f:
                 existing = json.load(f)
-            manual_reviews = {
-                r['source_file']: {
-                    'manually_reviewed': r.get('manually_reviewed', False),
-                    'manual_note': r.get('manual_note'),
-                }
-                for r in existing
-                if r.get('manually_reviewed')
-            }
+            manual_reviews = {r['source_file']: r for r in existing if r.get('manually_reviewed')}
             if skip_existing:
                 existing_files = {r['source_file'] for r in existing}
                 results.extend(existing)
@@ -1086,6 +1080,11 @@ def process_all_pdfs(
                 if prior_review:
                     fields['manually_reviewed'] = prior_review['manually_reviewed']
                     fields['manual_note'] = prior_review['manual_note']
+                    # Keep the values corrected by hand, not only the flag and the note.
+                    carried = carry_over(fields, prior_review)
+                    refresh_review_flags(fields)
+                    if carried:
+                        print(f"  kept manual values for {pdf_path.name}: {', '.join(carried)}")
                 results.append(fields)
 
     return results

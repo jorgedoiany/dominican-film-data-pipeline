@@ -20,7 +20,7 @@ from pathlib import Path
 
 DB_PATH = Path('database/dgcine.db')
 AUTHOR = 'JDP'
-ALLOWED_FIELDS = {'film_title', 'investor_name', 'production_company'}
+ALLOWED_FIELDS = {'film_title', 'investor_name', 'production_company', 'producer_rnc'}
 GARBAGE = re.compile(r'CONSIDERANDO|QUE EN FECHA')
 
 SUFFIX = 'Legal suffix standardized to the dotted form for consistency across records of the same entity'
@@ -80,6 +80,11 @@ CORRECTIONS = [
     fix('CIPAC-2012-019', 'investor_name', 'CENTRO CUESTA NACIONAL (CCN), C. POR A.', 'CENTRO CUESTA NACIONAL, S.A.S.',
         'Same entity as the other resolutions of this RNC (legal form and name written differently)',
         SAME_RNC, action='correct_value'),
+    fix('CIPAC-2012-019', 'producer_rnc', '1-30-88601-8', '1-30-86801-8',
+        'Digit transposition in the RNC', 'Resolution PDF header', action='correct_value'),
+    fix('CIPAC-2012-020', 'producer_rnc', '1-30-88601-8', '1-30-86801-8',
+        'Earlier note value 1-30-88601-8 was a digit transposition, the PDF header reads 1-30-86801-8',
+        'Resolution PDF header', action='correct_value'),
 ]
 
 

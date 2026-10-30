@@ -20,7 +20,7 @@ from pathlib import Path
 
 DB_PATH = Path('database/dgcine.db')
 AUTHOR = 'JDP'
-ALLOWED_FIELDS = {'film_title', 'investor_name', 'production_company', 'producer_rnc', 'tax_credit_dop', 'total_budget_executed'}
+ALLOWED_FIELDS = {'film_title', 'investor_name', 'production_company', 'producer_rnc', 'tax_credit_dop', 'total_budget_executed', 'investor_rnc'}
 GARBAGE = re.compile(r'CONSIDERANDO|QUE EN FECHA')
 
 SUFFIX = 'Legal suffix standardized to the dotted form for consistency across records of the same entity'
@@ -97,6 +97,18 @@ CORRECTIONS = [
     fix('CIPAC-2012-019', 'total_budget_executed', 23454760.0, 23454762.0,
         'Executed budget misread by two units', 'Resolution PDF budget section',
         action='correct_value'),
+    fix('CIPAC-2013-004', 'investor_rnc', '1-01-61678-7', '1-01-61878-7',
+        'Digit misread in the RNC of the same entity (Orange, now Altice)',
+        'Resolution PDF header', action='correct_value'),
+    fix('CIPAC-2013-012', 'investor_rnc', '1-01-61678-7', '1-01-61878-7',
+        'Digit misread in the RNC of the same entity (Orange, now Altice)',
+        'Resolution PDF header', action='correct_value'),
+    fix('CIPAC-2014-004', 'investor_rnc', '1-01-61678-7', '1-01-61878-7',
+        'Digit misread in the RNC, an earlier note value 1-01-61878-1 was also wrong',
+        'Resolution PDF header', action='correct_value'),
+    fix('CIPAC-2018-092', 'investor_rnc', '1-01-02473-4', '1-01-70527-2',
+        'RNC misread, same investor as the other resolutions of this entity',
+        'Resolution PDF header', action='correct_value'),
 ]
 
 

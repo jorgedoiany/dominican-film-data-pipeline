@@ -20,7 +20,7 @@ from pathlib import Path
 
 DB_PATH = Path('database/dgcine.db')
 AUTHOR = 'JDP'
-ALLOWED_FIELDS = {'film_title', 'investor_name', 'production_company', 'producer_rnc', 'tax_credit_dop'}
+ALLOWED_FIELDS = {'film_title', 'investor_name', 'production_company', 'producer_rnc', 'tax_credit_dop', 'total_budget_executed'}
 GARBAGE = re.compile(r'CONSIDERANDO|QUE EN FECHA')
 
 SUFFIX = 'Legal suffix standardized to the dotted form for consistency across records of the same entity'
@@ -91,6 +91,12 @@ CORRECTIONS = [
     fix('CIPAC-2022-041', 'tax_credit_dop', 156746.0, 156946.0,
         'Tax credit equals the validated amount in Art. 34, digit misread',
         'Resolution PDF', action='correct_value'),
+    fix('CIPAC-2012-010', 'total_budget_executed', 551392492.71, 51392492.71,
+        'Extra leading digit in the executed budget', 'Resolution PDF budget section',
+        action='correct_value'),
+    fix('CIPAC-2012-019', 'total_budget_executed', 23454760.0, 23454762.0,
+        'Executed budget misread by two units', 'Resolution PDF budget section',
+        action='correct_value'),
 ]
 
 

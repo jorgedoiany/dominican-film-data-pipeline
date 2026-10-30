@@ -32,6 +32,9 @@ RESTORE = [
     ('CIPAC-2012-005', 'investor_rnc'), ('CIPAC-2012-005', 'producer_rnc'),
     ('CIPAC-2012-010', 'producer_rnc'), ('CIPAC-2012-011', 'producer_rnc'),
 ]
+RESTORE += [(f'CIPAC-2012-{n}', 'total_budget_approved') for n in (
+    '001', '002', '003', '004', '005', '010', '011', '012', '013', '014', '015', '016', '019', '020')]
+RESTORE += [(f'CIPAC-2012-{n}', 'total_budget_executed') for n in ('001', '014', '015', '016')]
 FIELDS = {f for _, f in RESTORE}
 
 

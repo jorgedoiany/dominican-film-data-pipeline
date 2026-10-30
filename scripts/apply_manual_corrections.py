@@ -35,6 +35,18 @@ CORRECTIONS = [
          old='TRAVESIÍA', new='TRAVESÍA',
          reason='Extra letter I; correct spelling per JSON and productions table',
          source='cipac_2020_results.json'),
+    dict(res='CIPAC-2012-015', field='film_title',
+         old='FEO DE DÍA, LINDA DE NOCHE', new='FEO DE DÍA, LINDO DE NOCHE',
+         reason='OCR misread LINDO as LINDA', source='Resolution PDF title'),
+    dict(res='CIPAC-2012-016', field='film_title',
+         old='FEO DE DÍA, LINDA DE NOCHE', new='FEO DE DÍA, LINDO DE NOCHE',
+         reason='OCR misread LINDO as LINDA; same film as CIPAC-2012-015',
+         source='productions table'),
+    dict(res='CIPAC-2022-202', field='film_title',
+         old="DOMINICANA'S GOTTALENT - SEGUNDA TEMPORADA",
+         new="DOMINICANA'S GOT TALENT-SEGUNDA TEMPORADA",
+         reason='Extraction merged GOT TALENT and added spaces around the hyphen',
+         source='Resolution PDF title'),
 ]
 
 

@@ -227,4 +227,9 @@ data/raw/
 *.json
 .DS_Store
 database/dgcine.db
-database/dgcine.db
+
+# Processed results hold the manual review state, keep them under version control
+!data/cipac_*_results.json
+
+# Local backups created by the correction scripts
+*.bak-*

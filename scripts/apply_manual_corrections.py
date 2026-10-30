@@ -5,10 +5,13 @@ Dry-run by default (writes nothing). Use --apply to write.
 Safe to re-run: a correction already applied is skipped and a note is never
 added twice. Each applied correction appends one entry to manual_note, in the
 same format as earlier manual corrections:
-    field|set_manual|old|new|reason|source|date|author
+    field|action|old|new|reason|source|date|author
+An entry with garbage=True accepts any current value that is extraction
+garbage (text from the resolution preamble) instead of an exact old value.
 """
 import argparse
 import json
+import re
 import shutil
 import sqlite3
 import sys
@@ -17,41 +20,71 @@ from pathlib import Path
 
 DB_PATH = Path('database/dgcine.db')
 AUTHOR = 'JDP'
-ALLOWED_FIELDS = {'film_title', 'investor_name'}
+ALLOWED_FIELDS = {'film_title', 'investor_name', 'production_company'}
+GARBAGE = re.compile(r'CONSIDERANDO|QUE EN FECHA')
+
+SUFFIX = 'Legal suffix standardized to the dotted form for consistency across records of the same entity'
+SAME_RNC = 'Consistency with other resolutions of the same RNC'
+GARBAGE_REASON = 'OCR captured Considerando paragraph instead of the name'
+
+
+def fix(res, field, old, new, reason, source, action='set_manual', garbage=False):
+    return dict(res=res, field=field, old=old, new=new, reason=reason,
+                source=source, action=action, garbage=garbage)
+
 
 CORRECTIONS = [
-    dict(res='CIPAC-2012-012', field='film_title',
-         old='FEE DE DÍA, LINDO DE NOCHE', new='FEO DE DÍA, LINDO DE NOCHE',
-         reason='OCR misread FEO as FEE', source='Resolution PDF title'),
-    dict(res='CIPAC-2012-012', field='investor_name',
-         old='RNC: 1-01-04029-7', new='BANCO MÚLTIPLE BDI, S.A.',
-         reason='Name field held the RNC instead of the investor name',
-         source='Resolution PDF header'),
-    dict(res='CIPAC-2012-014', field='film_title',
-         old='FEE DE DÍA, LINDO DE NOCHE', new='FEO DE DÍA, LINDO DE NOCHE',
-         reason='OCR misread FEO as FEE; same film as CIPAC-2012-012',
-         source='productions table'),
-    dict(res='CIPAC-2020-051', field='film_title',
-         old='TRAVESIÍA', new='TRAVESÍA',
-         reason='Extra letter I; correct spelling per JSON and productions table',
-         source='cipac_2020_results.json'),
-    dict(res='CIPAC-2012-015', field='film_title',
-         old='FEO DE DÍA, LINDA DE NOCHE', new='FEO DE DÍA, LINDO DE NOCHE',
-         reason='OCR misread LINDO as LINDA', source='Resolution PDF title'),
-    dict(res='CIPAC-2012-016', field='film_title',
-         old='FEO DE DÍA, LINDA DE NOCHE', new='FEO DE DÍA, LINDO DE NOCHE',
-         reason='OCR misread LINDO as LINDA; same film as CIPAC-2012-015',
-         source='productions table'),
-    dict(res='CIPAC-2022-202', field='film_title',
-         old="DOMINICANA'S GOTTALENT - SEGUNDA TEMPORADA",
-         new="DOMINICANA'S GOT TALENT-SEGUNDA TEMPORADA",
-         reason='Extraction merged GOT TALENT and added spaces around the hyphen',
-         source='Resolution PDF title'),
+    fix('CIPAC-2012-012', 'film_title', 'FEE DE DÍA, LINDO DE NOCHE', 'FEO DE DÍA, LINDO DE NOCHE',
+        'OCR misread FEO as FEE', 'Resolution PDF title'),
+    fix('CIPAC-2012-012', 'investor_name', 'RNC: 1-01-04029-7', 'BANCO MÚLTIPLE BDI, S.A.',
+        'Name field held the RNC instead of the investor name', 'Resolution PDF header'),
+    fix('CIPAC-2012-014', 'film_title', 'FEE DE DÍA, LINDO DE NOCHE', 'FEO DE DÍA, LINDO DE NOCHE',
+        'OCR misread FEO as FEE; same film as CIPAC-2012-012', 'productions table'),
+    fix('CIPAC-2020-051', 'film_title', 'TRAVESIÍA', 'TRAVESÍA',
+        'Extra letter I; correct spelling per JSON and productions table', 'cipac_2020_results.json'),
+    fix('CIPAC-2012-015', 'film_title', 'FEO DE DÍA, LINDA DE NOCHE', 'FEO DE DÍA, LINDO DE NOCHE',
+        'OCR misread LINDO as LINDA', 'Resolution PDF title'),
+    fix('CIPAC-2012-016', 'film_title', 'FEO DE DÍA, LINDA DE NOCHE', 'FEO DE DÍA, LINDO DE NOCHE',
+        'OCR misread LINDO as LINDA; same film as CIPAC-2012-015', 'productions table'),
+    fix('CIPAC-2022-202', 'film_title', "DOMINICANA'S GOTTALENT - SEGUNDA TEMPORADA",
+        "DOMINICANA'S GOT TALENT-SEGUNDA TEMPORADA",
+        'Extraction merged GOT TALENT and added spaces around the hyphen', 'Resolution PDF title'),
+    # --- Entity name consistency (rule A: dotted legal suffix) ---
+    fix('CIPAC-2012-002', 'production_company', 'ENTREPRENEUR FILMS, SRL', 'ENTREPRENEUR FILMS, S.R.L.', SUFFIX, SAME_RNC),
+    fix('CIPAC-2012-003', 'production_company', 'ENTREPRENEUR FILMS, SRL', 'ENTREPRENEUR FILMS, S.R.L.', SUFFIX, SAME_RNC),
+    fix('CIPAC-2012-004', 'production_company', 'ENTREPRENEUR FILMS, SRL', 'ENTREPRENEUR FILMS, S.R.L.', SUFFIX, SAME_RNC),
+    fix('CIPAC-2012-005', 'production_company', 'ENTREPRENEUR FILMS, SRL', 'ENTREPRENEUR FILMS, S.R.L.', SUFFIX, SAME_RNC),
+    fix('CIPAC-2012-012', 'production_company', 'CINDERELLA, SRL', 'CINDERELO, S.R.L.',
+        'OCR misread CINDERELO as CINDERELLA; suffix standardized', SAME_RNC),
+    fix('CIPAC-2012-013', 'production_company', 'OCR_garbage', 'CINDERELO, S.R.L.', GARBAGE_REASON,
+        'Resolution PDF header', action='correct_value', garbage=True),
+    fix('CIPAC-2012-014', 'production_company', 'CINDERELO, SRL', 'CINDERELO, S.R.L.', SUFFIX, SAME_RNC),
+    fix('CIPAC-2012-015', 'production_company', 'OCR_garbage', 'CINDERELO, S.R.L.', GARBAGE_REASON,
+        'Resolution PDF header', action='correct_value', garbage=True),
+    fix('CIPAC-2012-016', 'production_company', 'CINDERELO, SRL', 'CINDERELO, S.R.L.', SUFFIX, SAME_RNC),
+    fix('CIPAC-2012-019', 'production_company', 'CINDERELO, SRL', 'CINDERELO, S.R.L.', SUFFIX, 'Same company name as other resolutions of the film'),
+    fix('CIPAC-2012-020', 'production_company', 'CINDERELO, SRL', 'CINDERELO, S.R.L.', SUFFIX, SAME_RNC),
+    fix('CIPAC-2012-005', 'investor_name', 'UNITED BRANDS, S. A.', 'UNITED BRANDS, S.A.',
+        'Extra space inside the legal suffix', SAME_RNC),
+    fix('CIPAC-2012-013', 'investor_name', 'CENTROS DEL CARIBE, SAS', 'CENTROS DEL CARIBE, S.A.S.', SUFFIX, SAME_RNC),
+    fix('CIPAC-2012-020', 'investor_name', 'SIGMA PETROLEUM CORP., SRL', 'SIGMA PETROLEUM CORP, S.R.L.',
+        'Extra period after CORP; suffix standardized', SAME_RNC),
+    fix('CIPAC-2012-015', 'investor_name', 'OCR_garbage', 'CARIBBEAN FILMS DISTRIBUTION, S.R.L.', GARBAGE_REASON,
+        'Resolution PDF header', action='correct_value', garbage=True),
+    fix('CIPAC-2016-103', 'investor_name', 'CARIBBEAN FILMS DISTRIBUTION R&L, S.R.L.',
+        'CARIBBEAN FILMS DISTRIBUTION, S.R.L.',
+        'Extra R&L in the name; same entity as CIPAC-2012-015', SAME_RNC),
+    fix('CIPAC-2012-010', 'investor_name', 'ORANGE DOMINICANA, S. A.', 'ALTICE DOMINICANA, S.A.',
+        'Same entity as the other resolutions of this RNC (company rebranded from Orange to Altice)',
+        SAME_RNC, action='correct_value'),
+    fix('CIPAC-2012-019', 'investor_name', 'CENTRO CUESTA NACIONAL (CCN), C. POR A.', 'CENTRO CUESTA NACIONAL, S.A.S.',
+        'Same entity as the other resolutions of this RNC (legal form and name written differently)',
+        SAME_RNC, action='correct_value'),
 ]
 
 
 def marker(c):
-    return f"{c['field']}|set_manual|{c['old']}|{c['new']}|"
+    return f"{c['field']}|{c['action']}|{c['old']}|{c['new']}|"
 
 
 def entry(c, today):
@@ -79,7 +112,10 @@ def json_format(text):
 def status(cur, c):
     if cur == c['new']:
         return 'already applied'
-    if cur == c['old']:
+    if c['garbage']:
+        if isinstance(cur, str) and GARBAGE.search(cur):
+            return 'will apply'
+    elif cur == c['old']:
         return 'will apply'
     return f'UNEXPECTED value: {cur!r}'
 
@@ -96,7 +132,7 @@ def main():
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
 
-    jsons = {}  # year -> dict(path, text, data, fmt, nl)
+    jsons = {}  # year -> dict(path, data, fmt, nl)
     problems = []
     pending = False
     print(f"{'DRY-RUN' if not args.apply else 'APPLY'} | date {today}\n")
@@ -104,14 +140,13 @@ def main():
         row = con.execute(
             f"SELECT {c['field']} AS v, manual_note FROM cipac_resolutions WHERE resolution_number = ?",
             (c['res'],)).fetchone()
-        year = c['res'].split('-')[1]
+        year = str(c['res']).split('-')[1]
         if year not in jsons:
             p = Path(f'data/cipac_{year}_results.json')
             text = p.read_text(encoding='utf-8')
             fmt, nl = json_format(text)
-            jsons[year] = dict(path=p, text=text, data=json.loads(text), fmt=fmt, nl=nl)
-        j = jsons[year]
-        rec = next((r for r in j['data'] if r['resolution_number'] == c['res']), None)
+            jsons[year] = dict(path=p, data=json.loads(text), fmt=fmt, nl=nl)
+        rec = next((r for r in jsons[year]['data'] if r['resolution_number'] == c['res']), None)
         db_status = 'MISSING record' if row is None else status(row['v'], c)
         js_status = 'MISSING record' if rec is None else status(rec.get(c['field']), c)
         print(f"{c['res']} | {c['field']}\n   DB  : {db_status}\n   JSON: {js_status}")
@@ -120,9 +155,9 @@ def main():
             or (rec is not None and marker(c) not in (rec.get('manual_note') or ''))
         for s in (db_status, js_status):
             if s.startswith(('UNEXPECTED', 'MISSING')):
-                problems.append((c['res'], c['field'], s))
+                problems.append((c['res'], c['field'], s[:90]))
 
-    for y, j in jsons.items():
+    for j in jsons.values():
         print(f"\nJSON format {j['path']}: " + ('reproducible' if j['fmt'] else 'NOT reproducible'))
         if j['fmt'] is None:
             problems.append((str(j['path']), 'format', 'cannot rewrite without a noisy diff'))
@@ -157,7 +192,7 @@ def main():
                 "WHERE resolution_number = ?", (c['new'], note, c['res']))
 
     for c in CORRECTIONS:
-        j = jsons[c['res'].split('-')[1]]
+        j = jsons[str(c['res']).split('-')[1]]
         rec = next(r for r in j['data'] if r['resolution_number'] == c['res'])
         rec[c['field']] = c['new']
         rec['manual_note'], _ = add_note(rec.get('manual_note'), c, today)
@@ -166,9 +201,9 @@ def main():
         out = json.dumps(j['data'], **j['fmt']) + ('\n' if j['nl'] else '')
         j['path'].write_text(out, encoding='utf-8')
 
-    print('\nApplied. Verify with: git diff --stat && sqlite3 -readonly database/dgcine.db '
-          '"SELECT resolution_number, film_title, investor_name FROM cipac_resolutions '
-          "WHERE resolution_number IN ('CIPAC-2012-012','CIPAC-2012-014','CIPAC-2020-051');\"")
+    print('\nApplied. Verify with: sqlite3 -readonly database/dgcine.db '
+          '"SELECT resolution_number, film_title, production_company, investor_name FROM cipac_resolutions '
+          "WHERE resolution_number BETWEEN 'CIPAC-2012-002' AND 'CIPAC-2012-020' OR resolution_number IN ('CIPAC-2020-051','CIPAC-2022-202');\"")
 
 
 if __name__ == '__main__':

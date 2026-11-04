@@ -20,7 +20,7 @@ from pathlib import Path
 
 DB_PATH = Path('database/dgcine.db')
 AUTHOR = 'JDP'
-ALLOWED_FIELDS = {'film_title', 'investor_name', 'production_company', 'producer_rnc', 'tax_credit_dop', 'total_budget_executed', 'investor_rnc'}
+ALLOWED_FIELDS = {'film_title', 'investor_name', 'production_company', 'producer_rnc', 'tax_credit_dop', 'total_budget_approved', 'total_budget_executed', 'investor_rnc'}
 GARBAGE = re.compile(r'CONSIDERANDO|QUE EN FECHA')
 
 SUFFIX = 'Legal suffix standardized to the dotted form for consistency across records of the same entity'
@@ -91,6 +91,24 @@ CORRECTIONS = [
     fix('CIPAC-2022-041', 'tax_credit_dop', 156746.0, 156946.0,
         'Tax credit equals the validated amount in Art. 34, digit misread',
         'Resolution PDF', action='correct_value'),
+    fix('CIPAC-2019-054', 'total_budget_approved', 69863139.0, 69787539.0,
+        'Approved budget digits misread; sibling resolutions 2019-053 and 2019-055 state the same figure',
+        'Resolution PDF budget section', action='correct_value'),
+    fix('CIPAC-2019-055', 'total_budget_approved', 69863139.0, 69787539.0,
+        'Approved budget digits misread; sibling resolutions 2019-053 and 2019-054 state the same figure',
+        'Resolution PDF budget section', action='correct_value'),
+    fix('CIPAC-2019-077', 'total_budget_approved', 58175335.0, 59222110.0,
+        'Approved budget digits misread; sibling resolution 2019-078 states the same figure',
+        'Resolution PDF budget section', action='correct_value'),
+    fix('CIPAC-2020-025', 'total_budget_approved', 55684501.0, 57353472.0,
+        'Approved budget digits misread; sibling resolution 2020-018 states the same figure',
+        'Resolution PDF budget section', action='correct_value'),
+    fix('CIPAC-2023-284', 'total_budget_approved', 84546321.93, 64546321.93,
+        'Approved budget digit misread; sibling resolution 2023-283 states the same figure',
+        'Resolution PDF budget section', action='correct_value'),
+    fix('CIPAC-2026-003', 'total_budget_approved', 79738187.0, 79738189.2,
+        'Approved budget digits misread; sibling resolutions 2026-001 and 2026-002 state the same figure',
+        'Resolution PDF budget section', action='correct_value'),
     fix('CIPAC-2012-010', 'total_budget_executed', 551392492.71, 51392492.71,
         'Extra leading digit in the executed budget', 'Resolution PDF budget section',
         action='correct_value'),

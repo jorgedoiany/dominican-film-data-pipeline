@@ -1315,13 +1315,13 @@
     "request_date": "2019-02-11",
     "validated_amount_dop": 500000.0,
     "tax_credit_dop": 500000.0,
-    "total_budget_approved": 69863139.0,
+    "total_budget_approved": 69787539.0,
     "total_budget_executed": 69863139.0,
     "extraction_confidence": 0.9,
     "needs_review": false,
     "review_reasons": null,
     "manually_reviewed": true,
-    "manual_note": "request_date|set_manual|null|2019-02-11|Stamp covers word Solicitud in request date line|Resolution PDF VISTOS section|2026-07-30|JDP",
+    "manual_note": "request_date|set_manual|null|2019-02-11|Stamp covers word Solicitud in request date line|Resolution PDF VISTOS section|2026-07-30|JDP;;total_budget_approved|correct_value|69863139.0|69787539.0|Approved budget digits misread; sibling resolutions 2019-053 and 2019-055 state the same figure|Resolution PDF budget section|2026-11-04|JDP",
     "source_file": "resolucion-cipac-no-2019-054_validacion-de-inversion-jimenez-cruz-pena-s-a-s-mis-500-locos.pdf"
   },
   {
@@ -1340,13 +1340,13 @@
     "request_date": "2019-02-11",
     "validated_amount_dop": 1650000.0,
     "tax_credit_dop": 1650000.0,
-    "total_budget_approved": 69863139.0,
+    "total_budget_approved": 69787539.0,
     "total_budget_executed": 69863139.0,
     "extraction_confidence": 0.9,
     "needs_review": false,
     "review_reasons": null,
     "manually_reviewed": true,
-    "manual_note": "request_date|set_manual|null|2019-02-11|Stamp covers word Solicitud in request date line|Resolution PDF VISTOS section|2026-07-30|JDP",
+    "manual_note": "request_date|set_manual|null|2019-02-11|Stamp covers word Solicitud in request date line|Resolution PDF VISTOS section|2026-07-30|JDP;;total_budget_approved|correct_value|69863139.0|69787539.0|Approved budget digits misread; sibling resolutions 2019-053 and 2019-054 state the same figure|Resolution PDF budget section|2026-11-04|JDP",
     "source_file": "resolucion-cipac-no-2019-055_validacion-de-inversion-aeropuerto-internacional-del-cibao-s-a-mis-500-locos.pdf"
   },
   {
@@ -1890,13 +1890,13 @@
     "request_date": "2019-02-01",
     "validated_amount_dop": 7500000.0,
     "tax_credit_dop": 7500000.0,
-    "total_budget_approved": 58175335.0,
+    "total_budget_approved": 59222110.0,
     "total_budget_executed": 58175335.0,
     "extraction_confidence": 0.9,
     "needs_review": false,
     "review_reasons": null,
     "manually_reviewed": true,
-    "manual_note": "request_date|set_manual|null|2019-02-01|Stamp covers word Solicitud in request date line|Resolution PDF VISTOS section|2026-07-30|JDP",
+    "manual_note": "request_date|set_manual|null|2019-02-01|Stamp covers word Solicitud in request date line|Resolution PDF VISTOS section|2026-07-30|JDP;;total_budget_approved|correct_value|58175335.0|59222110.0|Approved budget digits misread; sibling resolution 2019-078 states the same figure|Resolution PDF budget section|2026-11-04|JDP",
     "source_file": "resolucion-cipac-no-2019-077_validacion-de-inversion-distribuidores-internacionales-de-petroleo-s-a-constanza.pdf"
   },
   {

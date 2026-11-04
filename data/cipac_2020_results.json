@@ -615,13 +615,13 @@
     "request_date": "2019-12-23",
     "validated_amount_dop": 3000000.0,
     "tax_credit_dop": 3000000.0,
-    "total_budget_approved": 55684501.0,
+    "total_budget_approved": 57353472.0,
     "total_budget_executed": 55684501.0,
     "extraction_confidence": 0.9,
     "needs_review": false,
     "review_reasons": null,
     "manually_reviewed": true,
-    "manual_note": "request_date|set_manual|null|2019-12-23|Stamp covers word Solicitud in request date line|Resolution PDF VISTOS section|2026-07-29|JDP",
+    "manual_note": "request_date|set_manual|null|2019-12-23|Stamp covers word Solicitud in request date line|Resolution PDF VISTOS section|2026-07-29|JDP;;total_budget_approved|correct_value|55684501.0|57353472.0|Approved budget digits misread; sibling resolution 2020-018 states the same figure|Resolution PDF budget section|2026-11-04|JDP",
     "source_file": "resolucion-cipac-no-2020-025_validacion-de-inversion-termo-envases-s-a-el-equipito.pdf"
   },
   {
